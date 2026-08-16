@@ -1,5 +1,7 @@
 # BLENearbyExchange
 
+a simplistic BLE exchange where each devices sends and receives a data payload (originally inspired by Apple's tap to exchange contacts)
+
 ## Showcase 
 
 [showcase.webm](https://github.com/user-attachments/assets/e1b75aec-c173-4913-a7bd-5c49d4e267a6)
