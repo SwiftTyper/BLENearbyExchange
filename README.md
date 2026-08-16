@@ -1,6 +1,6 @@
 # BLENearbyExchange
 
-a simple BLE exchange where each device sends and receives a data payload (originally inspired by Apple's tap to exchange contact info functionality)
+a simple proximity BLE exchange where each device sends and receives a data payload (originally inspired by Apple's tap to exchange contact info functionality)
 
 ## Showcase 
 
@@ -33,3 +33,4 @@ WindowGroup {
 - [ ] Play around with Bluetooth Channel Sounding
 - [ ] Encrypt Traffic
 - [ ] Mock BLE for units
+- [ ] Handle 3+ potential devices in proximity
