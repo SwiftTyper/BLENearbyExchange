@@ -1,0 +1,39 @@
+sequenceDiagram
+    participant A as Device A
+    participant B as Device B
+
+    Note over A,B: 1. Discovery. Both call start and generate a random nonce
+    A->>A: advertise serviceUUID plus nonceA, and scan
+    B->>B: advertise serviceUUID plus nonceB, and scan
+    A-->>B: advertisement carrying nonceA
+    B-->>A: advertisement carrying nonceB
+
+    Note over A,B: 2. Role resolution. Higher nonce becomes central. Assume nonceA is greater
+    A->>A: role central, stop scanning
+    B->>B: role peripheral, keep advertising
+
+    Note over A,B: 3. Connect and discover GATT
+    A->>B: BLE connect
+    A->>B: discover services and characteristics
+
+    Note over A,B: 4. Handshake over the handshake characteristic
+    A->>B: write publicKeyA plus discoveryTokenA
+    B-->>A: read publicKeyB plus discoveryTokenB
+    Note over A,B: Both derive a shared key via ECDH
+
+    Note over A,B: 5. Proximity gate over UWB
+    A->>A: run NISession with peerToken tokenB
+    B->>B: run NISession with peerToken tokenA
+    B-->>A: didUpdate distance
+    A-->>B: didUpdate distance
+    Note over A,B: Proceed only when distance is below the threshold
+
+    Note over A,B: 6. Encrypted payload transfer, chunked to fit the MTU
+    A->>B: write cardA frames on payload characteristic
+    B-->>A: notify cardB frames on payload characteristic
+    A->>B: control done
+    B-->>A: control done
+
+    Note over A,B: 7. Reassemble and verify, emit received event
+    A->>A: state completed
+    B->>B: state completed

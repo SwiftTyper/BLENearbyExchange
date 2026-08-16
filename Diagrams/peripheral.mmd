@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant App as BLEPeripheralManager
+    participant PM as CBPeripheralManager
+    participant D as Delegate (self)
+
+    App->>PM: init(delegate: self, queue: BLEActor.queue)
+    PM-->>D: peripheralManagerDidUpdateState(.poweredOn)
+    Note over App,PM: only proceed once poweredOn
+
+    App->>PM: add(CBMutableService + 3 characteristics)
+    PM-->>D: didAdd service (error?)
+    App->>PM: startAdvertising([serviceUUIDs, localName = nonce])
+    PM-->>D: peripheralManagerDidStartAdvertising(error?)
+    Note over D: now discoverable & serving
+
+    D-->>D: didReceiveRead / didReceiveWrite (client I/O)
+    D-->>D: central didSubscribeTo (notifications armed)

@@ -1,0 +1,14 @@
+sequenceDiagram
+    participant A as Device A
+    participant B as Device B
+    Note over A,B: BLE already connected from role resolution
+    A->>A: create NISession, read discoveryToken tokenA
+    B->>B: create NISession, read discoveryToken tokenB
+    A->>B: send tokenA over handshake characteristic
+    B->>A: send tokenB over handshake characteristic
+    A->>A: run config with peerToken tokenB
+    B->>B: run config with peerToken tokenA
+    Note over A,B: both NISessions now live
+    B-->>A: didUpdate NINearbyObject.distance
+    A-->>B: didUpdate NINearbyObject.distance
+    Note over A,B: distance below threshold, gate passes

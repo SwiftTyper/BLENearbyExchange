@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant App as BLECentralManager
+    participant CM as CBCentralManager
+    participant Peer as CBPeripheral
+
+    App->>CM: init(delegate: self, queue: BLEActor.queue)
+    CM-->>App: centralManagerDidUpdateState(.poweredOn)
+    App->>CM: scanForPeripherals([serviceUUID], allowDuplicates)
+    CM-->>App: didDiscover(peripheral, advertisementData, RSSI)
+
+    App->>CM: connect(peripheral)
+    CM-->>App: didConnect(peripheral)
+    App->>Peer: discoverServices([serviceUUID])
+    Peer-->>App: didDiscoverServices
+    App->>Peer: discoverCharacteristics([handshake, payload, control])
+    Peer-->>App: didDiscoverCharacteristicsFor(service)
+    App->>Peer: setNotifyValue(true) on payload + control
+    Peer-->>App: didUpdateNotificationStateFor(characteristic)
+    Note over App,Peer: link ready for handshake
