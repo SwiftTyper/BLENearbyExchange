@@ -1,6 +1,6 @@
 # BLENearbyExchange
 
-a simplistic BLE exchange where each devices sends and receives a data payload (originally inspired by Apple's tap to exchange contacts)
+a simple BLE exchange where each device sends and receives a data payload (originally inspired by Apple's tap to exchange contact info functionality)
 
 ## Showcase 
 
