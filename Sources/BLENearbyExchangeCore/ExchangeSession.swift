@@ -3,8 +3,8 @@ import CoreBluetoothMock
 import Foundation
 
 @BLEActor
-final class ExchangeSession: TimeoutController {
-  let events = AsyncPassthrough<Event>()
+public final class ExchangeSession: TimeoutController {
+  public let events = AsyncPassthrough<Event>()
   private let centralState = AsyncCurrentValue<CBMManagerState>(.unknown)
   private let peripheralState = AsyncCurrentValue<CBMManagerState>(.unknown)
 
@@ -13,7 +13,7 @@ final class ExchangeSession: TimeoutController {
   private var ranger: ProximityRanger?
   private let configuration: NearbyExchange.Configuration
 
-  private(set) var isRunning = false
+  public private(set) var isRunning = false
   private var role: ConnectionRole?
   private var payload = Data()
   private var didPeerReceive = false
@@ -25,7 +25,7 @@ final class ExchangeSession: TimeoutController {
   private var received = TransferProgress()
   private var progress: Double = 0
 
-  nonisolated init(
+  public nonisolated init(
     configuration: NearbyExchange.Configuration
   ) {
     self.configuration = configuration
@@ -55,7 +55,7 @@ final class ExchangeSession: TimeoutController {
     }
   }
 
-  func start(payload: Data) async throws {
+  public func start(payload: Data) async throws {
     guard ProximityRanger.isSupported
     else { throw ExchangeError.unsupported }
 
@@ -91,7 +91,7 @@ final class ExchangeSession: TimeoutController {
     try await beginHandshake()
   }
 
-  override func timeoutDidFire() {
+  public override func timeoutDidFire() {
     fail(.timedOut)
   }
 
@@ -140,7 +140,7 @@ final class ExchangeSession: TimeoutController {
     }
   }
 
-  func terminate(_ control: GATT.Control) async {
+  public func terminate(_ control: GATT.Control) async {
     switch role {
     case .central:
       await withCheckedContinuation { continuation in
@@ -159,7 +159,7 @@ final class ExchangeSession: TimeoutController {
     }
   }
 
-  func stop() {
+  public func stop() {
     ranger?.onDistance = nil
     ranger?.onError = nil
     ranger?.stop()

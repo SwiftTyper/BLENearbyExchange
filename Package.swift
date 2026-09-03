@@ -5,6 +5,7 @@ let package = Package(
   name: "BLENearbyExchange",
   platforms: [
     .iOS(.v17),
+    .macOS(.v15),
   ],
   products: [
     .library(name: "BLENearbyExchange", targets: ["BLENearbyExchange"]),
@@ -16,6 +17,15 @@ let package = Package(
     .target(
       name: "BLENearbyExchange",
       dependencies: [
+        "BLENearbyExchangeCore"
+      ],
+      swiftSettings: [
+        .swiftLanguageMode(.v6),
+      ]
+    ),
+    .target(
+      name: "BLENearbyExchangeCore",
+      dependencies: [
         .product(name: "CoreBluetoothMock", package: "iOS-CoreBluetooth-Mock"),
       ],
       swiftSettings: [
@@ -23,9 +33,9 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "BLENearbyExchangeTests",
+      name: "BLENearbyExchangeCoreTests",
       dependencies: [
-        "BLENearbyExchange",
+        "BLENearbyExchangeCore",
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

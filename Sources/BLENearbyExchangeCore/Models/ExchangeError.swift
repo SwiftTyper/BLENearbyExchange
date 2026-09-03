@@ -2,7 +2,7 @@ import CoreBluetooth
 import CoreBluetoothMock
 import Foundation
 
-enum ExchangeError: Error, Equatable, Sendable {
+public enum ExchangeError: Error, Equatable, Sendable {
   case unsupported
   case unavailable(CBMManagerState)
   case timedOut
@@ -18,17 +18,17 @@ enum ExchangeError: Error, Equatable, Sendable {
   case transferFailed(String)
   case unknown(String)
 
-  init(_ error: any Error) {
+  public init(_ error: any Error) {
     self = error as? ExchangeError ?? .unknown(error.localizedDescription)
   }
 }
 
 extension ExchangeError: LocalizedError {
-  var errorDescription: String? {
+  public var errorDescription: String? {
     message
   }
 
-  var message: String {
+  public var message: String {
     switch self {
     case .unsupported:
       "This device can't measure the distance to another device."

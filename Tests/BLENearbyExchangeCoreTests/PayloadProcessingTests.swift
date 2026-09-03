@@ -1,4 +1,4 @@
-@testable import BLENearbyExchange
+@testable import BLENearbyExchangeCore
 import Foundation
 import Testing
 
