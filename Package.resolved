@@ -1,0 +1,15 @@
+{
+  "originHash" : "e374d46532acacd48b45df7a3ab5f2966875299b73d84c9114e33ab249770517",
+  "pins" : [
+    {
+      "identity" : "ios-corebluetooth-mock",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
+      "state" : {
+        "branch" : "main",
+        "revision" : "b238a352697dab76c916405b7e3076a8bbeec1ce"
+      }
+    }
+  ],
+  "version" : 3
+}

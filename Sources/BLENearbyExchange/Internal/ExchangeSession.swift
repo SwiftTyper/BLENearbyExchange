@@ -1,11 +1,12 @@
 import CoreBluetooth
+import CoreBluetoothMock
 import Foundation
 
 @BLEActor
 final class ExchangeSession: TimeoutController {
   let events = AsyncPassthrough<Event>()
-  private let centralState = AsyncCurrentValue<CBManagerState>(.unknown)
-  private let peripheralState = AsyncCurrentValue<CBManagerState>(.unknown)
+  private let centralState = AsyncCurrentValue<CBMManagerState>(.unknown)
+  private let peripheralState = AsyncCurrentValue<CBMManagerState>(.unknown)
 
   private var peripheral: BLEPeripheralManager?
   private var central: BLECentralManager?
@@ -44,7 +45,8 @@ final class ExchangeSession: TimeoutController {
           ranger: ranger
         )
         self.peripheral?.onStateChange = { [weak self] in
-          self?.peripheralState.send($0)
+          guard let mapped = CBMManagerState(rawValue: $0.rawValue) else { return }
+          self?.peripheralState.send(mapped)
         }
         self.central?.onStateChange = { [weak self] in
           self?.centralState.send($0)
@@ -122,7 +124,7 @@ final class ExchangeSession: TimeoutController {
   }
 
   private func waitForPoweredOn(
-    _ state: AsyncCurrentValue<CBManagerState>
+    _ state: AsyncCurrentValue<CBMManagerState>
   ) async throws {
     for await value in state.receive() {
       switch value {

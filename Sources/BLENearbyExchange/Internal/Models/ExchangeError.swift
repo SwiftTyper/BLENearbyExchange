@@ -1,9 +1,10 @@
 import CoreBluetooth
+import CoreBluetoothMock
 import Foundation
 
 enum ExchangeError: Error, Equatable, Sendable {
   case unsupported
-  case unavailable(CBManagerState)
+  case unavailable(CBMManagerState)
   case timedOut
   case cancelledByPeer
   case failedOnPeer

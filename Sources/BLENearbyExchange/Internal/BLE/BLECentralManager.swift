@@ -1,4 +1,5 @@
 import CoreBluetooth
+import CoreBluetoothMock
 import Foundation
 
 @BLEActor
@@ -6,15 +7,15 @@ final class BLECentralManager: NSObject {
   private let configuration: NearbyExchange.Configuration
 
   private var nonce: UInt64?
-  private var manager: CBCentralManager!
+  private var manager: CBMCentralManager!
   private var ranger: ProximityRanger
 
-  private var handshakeChar: CBCharacteristic?
-  private var payloadChar: CBCharacteristic?
-  private var controlChar: CBCharacteristic?
-  private var peripheral: CBPeripheral?
+  private var handshakeChar: CBMCharacteristic?
+  private var payloadChar: CBMCharacteristic?
+  private var controlChar: CBMCharacteristic?
+  private var peripheral: CBMPeripheral?
 
-  var onStateChange: ((CBManagerState) -> Void)?
+  var onStateChange: ((CBMManagerState) -> Void)?
 
   var payload = Data()
   var onPayloadReceived: ((Data) -> Void)?
@@ -40,11 +41,11 @@ final class BLECentralManager: NSObject {
     self.ranger = ranger
 
     super.init()
-
-    manager = CBCentralManager(
+    
+    self.manager = CBMCentralManagerFactory.instance(
       delegate: self,
       queue: BLEActor.queue,
-      options: nil
+      forceMock: false
     )
   }
 
@@ -150,16 +151,16 @@ final class BLECentralManager: NSObject {
   }
 }
 
-extension BLECentralManager: @BLEActor CBCentralManagerDelegate {
+extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
   func centralManagerDidUpdateState(
-    _ central: CBCentralManager
+    _ central: CBMCentralManager
   ) {
     onStateChange?(central.state)
   }
 
   func centralManager(
-    _ central: CBCentralManager,
-    didDiscover peripheral: CBPeripheral,
+    _ central: CBMCentralManager,
+    didDiscover peripheral: CBMPeripheral,
     advertisementData: [String: Any],
     rssi _: NSNumber
   ) {
@@ -187,15 +188,15 @@ extension BLECentralManager: @BLEActor CBCentralManagerDelegate {
   }
 
   func centralManager(
-    _: CBCentralManager,
-    didConnect peripheral: CBPeripheral
+    _: CBMCentralManager,
+    didConnect peripheral: CBMPeripheral
   ) {
     peripheral.discoverServices([configuration.serviceUUID.cbuuid])
   }
 
   func centralManager(
-    _: CBCentralManager,
-    didFailToConnect _: CBPeripheral,
+    _: CBMCentralManager,
+    didFailToConnect _: CBMPeripheral,
     error: Error?
   ) {
     flushTerminate()
@@ -203,8 +204,8 @@ extension BLECentralManager: @BLEActor CBCentralManagerDelegate {
   }
 
   func centralManager(
-    _: CBCentralManager,
-    didDisconnectPeripheral _: CBPeripheral,
+    _: CBMCentralManager,
+    didDisconnectPeripheral _: CBMPeripheral,
     error _: Error?
   ) {
     flushTerminate()
@@ -212,8 +213,8 @@ extension BLECentralManager: @BLEActor CBCentralManagerDelegate {
   }
 
   func centralManager(
-    _: CBCentralManager,
-    didDisconnectPeripheral _: CBPeripheral,
+    _: CBMCentralManager,
+    didDisconnectPeripheral _: CBMPeripheral,
     timestamp _: CFAbsoluteTime,
     isReconnecting: Bool,
     error _: Error?
@@ -225,20 +226,20 @@ extension BLECentralManager: @BLEActor CBCentralManagerDelegate {
   }
 
   func centralManager(
-    _: CBCentralManager,
-    connectionEventDidOccur _: CBConnectionEvent,
-    for _: CBPeripheral
+    _: CBMCentralManager,
+    connectionEventDidOccur _: CBMConnectionEvent,
+    for _: CBMPeripheral
   ) {}
 
   func centralManager(
-    _: CBCentralManager,
-    didUpdateANCSAuthorizationFor _: CBPeripheral
+    _: CBMCentralManager,
+    didUpdateANCSAuthorizationFor _: CBMPeripheral
   ) {}
 }
 
-extension BLECentralManager: @BLEActor CBPeripheralDelegate {
+extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   func peripheral(
-    _ peripheral: CBPeripheral,
+    _ peripheral: CBMPeripheral,
     didDiscoverServices error: (any Error)?
   ) {
     if let error {
@@ -260,8 +261,8 @@ extension BLECentralManager: @BLEActor CBPeripheralDelegate {
   }
 
   func peripheral(
-    _ peripheral: CBPeripheral,
-    didDiscoverCharacteristicsFor service: CBService,
+    _ peripheral: CBMPeripheral,
+    didDiscoverCharacteristicsFor service: CBMService,
     error: (any Error)?
   ) {
     if let error {
@@ -298,8 +299,8 @@ extension BLECentralManager: @BLEActor CBPeripheralDelegate {
   }
 
   func peripheral(
-    _: CBPeripheral,
-    didWriteValueFor characteristic: CBCharacteristic,
+    _: CBMPeripheral,
+    didWriteValueFor characteristic: CBMCharacteristic,
     error: (any Error)?
   ) {
     if characteristic.uuid == GATT.control.cbuuid {
@@ -311,13 +312,13 @@ extension BLECentralManager: @BLEActor CBPeripheralDelegate {
     }
   }
 
-  func peripheralIsReady(toSendWriteWithoutResponse _: CBPeripheral) {
+  func peripheralIsReady(toSendWriteWithoutResponse _: CBMPeripheral) {
     drainOutbox()
   }
 
   func peripheral(
-    _: CBPeripheral,
-    didModifyServices invalidatedServices: [CBService]
+    _: CBMPeripheral,
+    didModifyServices invalidatedServices: [CBMService]
   ) {
     guard
       invalidatedServices.contains(where: { $0.uuid == configuration.serviceUUID.cbuuid })
@@ -327,8 +328,8 @@ extension BLECentralManager: @BLEActor CBPeripheralDelegate {
   }
 
   func peripheral(
-    _: CBPeripheral,
-    didUpdateNotificationStateFor _: CBCharacteristic,
+    _: CBMPeripheral,
+    didUpdateNotificationStateFor _: CBMCharacteristic,
     error: (any Error)?
   ) {
     if let error {
@@ -359,8 +360,8 @@ extension BLECentralManager: @BLEActor CBPeripheralDelegate {
   }
 
   func peripheral(
-    _ peripheral: CBPeripheral,
-    didUpdateValueFor characteristic: CBCharacteristic,
+    _ peripheral: CBMPeripheral,
+    didUpdateValueFor characteristic: CBMCharacteristic,
     error: (any Error)?
   ) {
     if let error {
