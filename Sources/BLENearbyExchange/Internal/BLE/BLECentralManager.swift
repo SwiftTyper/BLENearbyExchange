@@ -41,8 +41,8 @@ final class BLECentralManager: NSObject {
     self.ranger = ranger
 
     super.init()
-    
-    self.manager = CBMCentralManagerFactory.instance(
+
+    manager = CBMCentralManagerFactory.instance(
       delegate: self,
       queue: BLEActor.queue,
       forceMock: false
@@ -381,7 +381,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       }
 
     case GATT.payload.cbuuid:
-      let full = reassembler.add(frame: value)
+      let full = try? reassembler.add(frame: value)
       onReceiveProgress?(reassembler.progress)
 
       guard let full, let controlChar

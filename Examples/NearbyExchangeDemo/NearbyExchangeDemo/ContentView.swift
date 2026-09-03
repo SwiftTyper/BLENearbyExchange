@@ -69,20 +69,20 @@ extension ContentView {
   private func exchange() async {
     guard let payload = try? JSONEncoder().encode(file)
     else { return }
-    
+
     guard let peer = try? await nearbyExchange.run(payload: payload)
     else { return }
-    
+
     received = try? JSONDecoder().decode(FilePayload.self, from: peer)
   }
-  
+
   private func preview(_ file: FilePayload) {
     let name = URL(filePath: file.name).lastPathComponent
     let url = URL.temporaryDirectory.appending(path: name.isEmpty ? "received" : name)
-    
+
     guard (try? file.data.write(to: url)) != nil
     else { return }
-    
+
     previewURL = url
   }
 }
@@ -92,9 +92,9 @@ extension ContentView {
     var name: String
     var data: Data
   }
-  
+
   private static let dummy = FilePayload(
-    name: "dummy\(Int.random(in: 0..<10)).txt",
-    data: Data(String(repeating: "Dummy Payload Data :)", count: 5000 ).utf8)
+    name: "dummy\(Int.random(in: 0 ..< 10)).txt",
+    data: Data(String(repeating: "Dummy Payload Data :)", count: 5000).utf8)
   )
 }

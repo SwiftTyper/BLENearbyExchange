@@ -285,7 +285,7 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
         guard let value = request.value
         else { continue }
 
-        let full = reassembler.add(frame: value)
+        let full = try? reassembler.add(frame: value)
         onReceiveProgress?(reassembler.progress)
 
         guard let full
