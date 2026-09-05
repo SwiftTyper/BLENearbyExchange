@@ -76,7 +76,13 @@ final class MockPeripheralSpy: @unchecked Sendable {
       .build()
   }
   
+  var onPayload: ((Data) -> Void)?
+  var onControl: ((GATT.Control) -> Void)?
+  var onDisconnect: ((Error?) -> Void)?
+
   var handshakeToken: Data? { state.withLock(\.handshakeToken) }
+  var controls: [GATT.Control] { state.withLock(\.controls) }
+  var isConnected: Bool { spec.isConnected }
 
   func notify(_ data: Data, on uuid: UUID) {
     guard let characteristic = characteristics.first(where: { $0.uuid.uuidString == uuid.uuidString })
@@ -134,6 +140,7 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
       state.withLock {
         $0.controls.append(control)
       }
+      onControl?(control)
       return .success(())
 
     default:
@@ -149,11 +156,18 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     guard characteristic.uuid == GATT.payload.cbuuid
     else { return }
 
-    state.withLock {
-      $0.receivedFrames.append(data)
-      if let full = try? $0.reassembler.add(frame: data) {
-        $0.payload = full
-      }
+    let full = state.withLock { state -> Data? in
+      state.receivedFrames.append(data)
+
+      guard let full = try? state.reassembler.add(frame: data)
+      else { return nil }
+
+      state.payload = full
+      return full
+    }
+
+    if let full {
+      onPayload?(full)
     }
   }
 
@@ -163,6 +177,13 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     for _: CBMCharacteristicMock
   ) -> Result<Void, Error> {
     .success(())
+  }
+
+  func peripheral(
+    _: CBMPeripheralSpec,
+    didDisconnect error: Error?
+  ) {
+    onDisconnect?(error)
   }
 
   func peripheral(

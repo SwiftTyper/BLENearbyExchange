@@ -111,7 +111,6 @@ extension BLECentralManagerTests {
     let central = await makeSUT(peer: peer, ranger: ranger)
     
     let handshakeFailed = expectation(description: "the handshake failed")
-    handshakeFailed.assertForOverFulfill = false
     
     central.onError = { error in
       XCTAssertEqual(error, .rangingFailed("No local discovery token."))
@@ -135,7 +134,6 @@ extension BLECentralManagerTests {
     await connect(central, nonce: 2)
 
     let rangingFailed = expectation(description: "ranging failed")
-    rangingFailed.assertForOverFulfill = false
 
     central.onError = { error in
       guard case .rangingFailed = error else {
@@ -150,6 +148,194 @@ extension BLECentralManagerTests {
     await fulfillment(of: [rangingFailed], timeout: 2)
 
     XCTAssertNil(ranger.peerToken)
+  }
+}
+
+extension BLECentralManagerTests {
+  func test_sendingAPayloadDeliversItToThePeer() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+
+    let central = await makeSUT(peer: peer)
+
+    await connect(central, nonce: 2)
+
+    let payload = Data((0 ..< 500).map { UInt8($0 % 251) })
+
+    let payloadDelivered = expectation(description: "the peer received the payload")
+
+    peer.onPayload = { received in
+      XCTAssertEqual(received, payload)
+      payloadDelivered.fulfill()
+    }
+
+    let sendCompleted = expectation(description: "the send progress completed")
+
+    central.onSendProgress = { progress in
+      guard progress.bytes == payload.count
+      else { return }
+
+      XCTAssertEqual(progress, TransferProgress(bytes: payload.count, total: payload.count))
+      sendCompleted.fulfill()
+    }
+
+    central.send(payload: payload)
+
+    await fulfillment(of: [payloadDelivered, sendCompleted], timeout: 2)
+  }
+  
+  func test_payloadIsDeliveredAndConfirmed() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+    
+    let central = await makeSUT(peer: peer)
+    
+    await connect(central, nonce: 2)
+    
+    let payload = Data((0 ..< 500).map { UInt8($0 % 251) })
+    
+    let payloadReceived = expectation(description: "the payload was received")
+    
+    central.onPayloadReceived = { received in
+      XCTAssertEqual(received, payload)
+      payloadReceived.fulfill()
+    }
+    
+    let receiveCompleted = expectation(description: "the receive progress completed")
+    
+    central.onReceiveProgress = { progress in
+      guard progress.bytes == payload.count
+      else { return }
+      
+      receiveCompleted.fulfill()
+    }
+    
+    let receiptConfirmed = expectation(description: "receipt was confirmed to the peer")
+    
+    peer.onControl = { control in
+      XCTAssertEqual(control, .done)
+      receiptConfirmed.fulfill()
+    }
+    
+    peer.send(payload: payload)
+    
+    await fulfillment(
+      of: [payloadReceived, receiveCompleted, receiptConfirmed],
+      timeout: 2
+    )
+  }
+  
+  func test_doneControlConfirmsThePeerReceivedThePayload() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+    
+    let central = await makeSUT(peer: peer)
+    
+    await connect(central, nonce: 2)
+    
+    let receiptConfirmed = expectation(description: "the peer confirmed receipt")
+    
+    central.onPeerReceivedDataConfirmation = {
+      receiptConfirmed.fulfill()
+    }
+    
+    peer.send(.done)
+    
+    await fulfillment(of: [receiptConfirmed], timeout: 2)
+  }
+}
+  
+extension BLECentralManagerTests {
+  func test_cancelledControlFailsTheExchange() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+
+    let central = await makeSUT(peer: peer)
+
+    await connect(central, nonce: 2)
+
+    let exchangeFailed = expectation(description: "the exchange failed")
+
+    central.onError = { error in
+      XCTAssertEqual(error, .cancelledByPeer)
+      exchangeFailed.fulfill()
+    }
+
+    peer.send(.cancelled)
+
+    await fulfillment(of: [exchangeFailed], timeout: 2)
+  }
+
+  func test_failedControlFailsTheExchange() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+
+    let central = await makeSUT(peer: peer)
+
+    await connect(central, nonce: 2)
+
+    let exchangeFailed = expectation(description: "the exchange failed")
+
+    central.onError = { error in
+      XCTAssertEqual(error, .failedOnPeer)
+      exchangeFailed.fulfill()
+    }
+
+    peer.send(.failed)
+
+    await fulfillment(of: [exchangeFailed], timeout: 2)
+  }
+  
+  func test_terminatingWritesTheControlAndCallsBack() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+
+    let central = await makeSUT(peer: peer)
+
+    await connect(central, nonce: 2)
+
+    let terminateSent = expectation(description: "the terminate control was written")
+
+    central.sendTerminate(.cancelled) {
+      terminateSent.fulfill()
+    }
+
+    await fulfillment(of: [terminateSent], timeout: 2)
+
+    XCTAssertEqual(peer.controls, [.cancelled])
+  }
+
+  func test_disconnectionIsReportedAsAnError() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+
+    let central = await makeSUT(peer: peer)
+
+    await connect(central, nonce: 2)
+
+    let disconnectionReported = expectation(description: "the disconnection was reported")
+
+    central.onError = { error in
+      XCTAssertEqual(error, .disconnected)
+      disconnectionReported.fulfill()
+    }
+
+    peer.disconnect()
+
+    await fulfillment(of: [disconnectionReported], timeout: 2)
+  }
+
+  func test_stoppingCancelsTheConnection() async {
+    let peer = MockPeripheralSpy(nonce: 1)
+
+    let central = await makeSUT(peer: peer)
+
+    await connect(central, nonce: 2)
+
+    let peerDisconnected = expectation(description: "the peer disconnected")
+
+    peer.onDisconnect = { _ in
+      peerDisconnected.fulfill()
+    }
+
+    central.stop()
+
+    await fulfillment(of: [peerDisconnected], timeout: 2)
+
+    XCTAssertFalse(peer.isConnected)
   }
 }
 
