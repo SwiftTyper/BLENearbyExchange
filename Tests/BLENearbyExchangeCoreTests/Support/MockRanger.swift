@@ -3,11 +3,18 @@ import Foundation
 
 @BLEActor
 final class MockRanger: ProximityRanger {
-  var localToken: Data? = Data("local-token".utf8)
+  var localToken: Data?
   var rangingError: Error?
+  var onStartRanging: ((Data) -> Void)?
 
   private(set) var peerToken: Data?
   private(set) var isStopped = false
+  
+  init(
+    localToken: Data? = Data("local-token".utf8)
+  ) {
+    self.localToken = localToken
+  }
 
   override func localDiscoveryToken() -> Data? {
     localToken
@@ -18,6 +25,7 @@ final class MockRanger: ProximityRanger {
       throw rangingError
     }
     self.peerToken = peerToken
+    onStartRanging?(peerToken)
   }
 
   override func stop() {

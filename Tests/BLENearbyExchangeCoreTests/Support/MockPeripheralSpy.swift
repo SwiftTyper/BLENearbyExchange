@@ -2,14 +2,23 @@
 import CoreBluetooth
 import CoreBluetoothMock
 import Foundation
+import Synchronization
 
 final class MockPeripheralSpy: @unchecked Sendable {
-  let mtu: Int
-  
   private(set) var spec: CBMPeripheralSpec!
+  private let mtu: Int
   private let characteristics: [CBMCharacteristicMock]
-  private let lock = NSLock()
-  private var state = State()
+  private let state = Mutex<State>(.init())
+  
+  struct State {
+    var handshakeToken: Data?
+    var controls: [GATT.Control] = []
+    var payload: Data?
+    var receivedFrames: [Data] = []
+    var notifying: Set<String> = []
+    var reassembler = Reassembler()
+    var serviceDiscoveryError: Error?
+  }
   
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
@@ -66,18 +75,8 @@ final class MockPeripheralSpy: @unchecked Sendable {
       )
       .build()
   }
-
-  var handshakeToken: Data? { read(\.handshakeToken) }
-  var controls: [GATT.Control] { read(\.controls) }
-  var payload: Data? { read(\.payload) }
-  var receivedFrames: [Data] { read(\.receivedFrames) }
-  var notifying: Set<CBUUID> { read(\.notifying) }
-  var isConnected: Bool { spec.isConnected }
-
-  var serviceDiscoveryError: Error? {
-    get { read(\.serviceDiscoveryError) }
-    set { mutate { $0.serviceDiscoveryError = newValue } }
-  }
+  
+  var handshakeToken: Data? { state.withLock(\.handshakeToken) }
 
   func notify(_ data: Data, on uuid: UUID) {
     guard let characteristic = characteristics.first(where: { $0.uuid.uuidString == uuid.uuidString })
@@ -99,39 +98,20 @@ final class MockPeripheralSpy: @unchecked Sendable {
   func disconnect() {
     spec.simulateDisconnection()
   }
-
-  private struct State {
-    var handshakeToken: Data?
-    var controls: [GATT.Control] = []
-    var payload: Data?
-    var receivedFrames: [Data] = []
-    var notifying: Set<CBUUID> = []
-    var reassembler = Reassembler()
-    var serviceDiscoveryError: Error?
-  }
-
-  private func read<T>(_ keyPath: KeyPath<State, T>) -> T {
-    lock.withLock { state[keyPath: keyPath] }
-  }
-
-  @discardableResult
-  private func mutate<T>(_ body: (inout State) -> T) -> T {
-    lock.withLock { body(&state) }
-  }
 }
 
 extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
   func reset() {
-    mutate { $0 = State() }
+    state.withLock { $0 = State() }
   }
 
   func peripheral(
     _: CBMPeripheralSpec,
     didReceiveServiceDiscoveryRequest _: [CBMUUID]?
   ) -> Result<Void, Error> {
-    if let error = serviceDiscoveryError {
-      return .failure(error)
-    }
+//    if let error = serviceDiscoveryError {
+//      return .failure(error)
+//    }
     return .success(())
   }
 
@@ -142,7 +122,7 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
   ) -> Result<Void, Error> {
     switch characteristic.uuid {
     case GATT.handshake.cbuuid:
-      mutate { $0.handshakeToken = data }
+      state.withLock { $0.handshakeToken = data }
       return .success(())
 
     case GATT.control.cbuuid:
@@ -151,7 +131,9 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
         let control = GATT.Control(rawValue: raw)
       else { return .failure(CBMATTError(.invalidAttributeValueLength)) }
 
-      mutate { $0.controls.append(control) }
+      state.withLock {
+        $0.controls.append(control)
+      }
       return .success(())
 
     default:
@@ -167,7 +149,7 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     guard characteristic.uuid == GATT.payload.cbuuid
     else { return }
 
-    mutate {
+    state.withLock {
       $0.receivedFrames.append(data)
       if let full = try? $0.reassembler.add(frame: data) {
         $0.payload = full
@@ -188,11 +170,11 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     didUpdateNotificationStateFor characteristic: CBMCharacteristicMock,
     error _: Error?
   ) {
-    mutate {
-      if characteristic.isNotifying {
-        $0.notifying.insert(characteristic.uuid)
+    state.withLock { [uuid = characteristic.uuid, isNotifying = characteristic.isNotifying] in
+      if isNotifying {
+        $0.notifying.insert(uuid.uuidString)
       } else {
-        $0.notifying.remove(characteristic.uuid)
+        $0.notifying.remove(uuid.uuidString)
       }
     }
   }
