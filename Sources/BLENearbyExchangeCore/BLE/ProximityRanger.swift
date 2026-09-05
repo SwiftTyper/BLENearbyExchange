@@ -5,7 +5,7 @@ import Foundation
 #endif
 
 @BLEActor
-final class ProximityRanger: NSObject {
+class ProximityRanger: NSObject {
   var onDistance: ((Float) -> Void)?
   var onError: ((Error) -> Void)?
 

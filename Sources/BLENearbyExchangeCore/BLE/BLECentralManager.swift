@@ -35,7 +35,8 @@ final class BLECentralManager: NSObject {
 
   init(
     configuration: NearbyExchange.Configuration,
-    ranger: ProximityRanger
+    ranger: ProximityRanger,
+    forceMock: Bool = false
   ) {
     self.configuration = configuration
     self.ranger = ranger
@@ -45,7 +46,7 @@ final class BLECentralManager: NSObject {
     manager = CBMCentralManagerFactory.instance(
       delegate: self,
       queue: BLEActor.queue,
-      forceMock: false
+      forceMock: forceMock
     )
   }
 
@@ -416,4 +417,5 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       return
     }
   }
+
 }
