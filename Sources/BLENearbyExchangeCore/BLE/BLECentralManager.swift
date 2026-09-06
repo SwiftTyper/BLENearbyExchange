@@ -225,17 +225,6 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     flushTerminate()
     onError?(.disconnected)
   }
-
-  func centralManager(
-    _: CBMCentralManager,
-    connectionEventDidOccur _: CBMConnectionEvent,
-    for _: CBMPeripheral
-  ) {}
-
-  func centralManager(
-    _: CBMCentralManager,
-    didUpdateANCSAuthorizationFor _: CBMPeripheral
-  ) {}
 }
 
 extension BLECentralManager: @BLEActor CBMPeripheralDelegate {

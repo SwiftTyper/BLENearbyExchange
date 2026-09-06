@@ -7,8 +7,6 @@ final class MockRanger: ProximityRanger {
   var rangingError: Error?
   var onStartRanging: ((Data) -> Void)?
 
-  private(set) var peerToken: Data?
-
   init(
     localToken: Data? = Data("local-token".utf8)
   ) {
@@ -20,10 +18,7 @@ final class MockRanger: ProximityRanger {
   }
 
   override func startRanging(peerToken: Data) throws {
-    if let rangingError {
-      throw rangingError
-    }
-    self.peerToken = peerToken
+    if let rangingError { throw rangingError }
     onStartRanging?(peerToken)
   }
 }

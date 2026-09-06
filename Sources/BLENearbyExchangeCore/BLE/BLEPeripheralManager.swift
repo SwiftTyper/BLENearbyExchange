@@ -210,7 +210,7 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
     }
     advertisingContinuation = nil
   }
-
+  
   func peripheralManager(
     _: CBPeripheralManager,
     didAdd _: CBService,

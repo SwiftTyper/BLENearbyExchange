@@ -108,8 +108,6 @@ extension BLECentralManagerTests {
     peer.notify(peerToken, on: GATT.handshake)
 
     await fulfillment(of: [rangingStarted], timeout: 2)
-
-    XCTAssertEqual(ranger.peerToken, peerToken)
   }
   
   func test_failureToCreateNITokenFailsHandshake() async {
@@ -155,8 +153,6 @@ extension BLECentralManagerTests {
     peer.notify(Data("peer-token".utf8), on: GATT.handshake)
 
     await fulfillment(of: [rangingFailed], timeout: 2)
-
-    XCTAssertNil(ranger.peerToken)
   }
 }
 

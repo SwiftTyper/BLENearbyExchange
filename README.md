@@ -8,7 +8,7 @@ a simple proximity based BLE exchange where each device sends and receives a dat
 
 [showcase_atoms.webm](https://github.com/user-attachments/assets/46390f53-4397-4eac-bd0d-365c911c3733)
 
-(sorry for the shitty video quality)
+(sorry for the bad video quality)
 
 ## Usage 
 
@@ -34,3 +34,4 @@ WindowGroup {
 - [ ] Encrypt Traffic
 - [ ] Mock BLE for units
 - [ ] Handle 3+ potential devices in proximity
+- [ ] Add L2CAP support
