@@ -1,10 +1,10 @@
 import Foundation
 
 @BLEActor
-final class AsyncPassthrough<T: Sendable> {
+public final class AsyncPassthrough<T: Sendable> {
   private var continuations: [UUID: AsyncStream<T>.Continuation] = [:]
 
-  func receive() -> AsyncStream<T> {
+  public func receive() -> AsyncStream<T> {
     AsyncStream { continuation in
       let id = UUID()
       continuations[id] = continuation
@@ -15,7 +15,7 @@ final class AsyncPassthrough<T: Sendable> {
     }
   }
 
-  func send(_ event: T) {
+  public func send(_ event: T) {
     for continuation in continuations.values {
       continuation.yield(event)
     }

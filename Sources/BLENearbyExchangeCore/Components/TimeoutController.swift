@@ -1,7 +1,7 @@
 import Foundation
 
 @BLEActor
-class TimeoutController {
+public class TimeoutController {
   private var timer: DispatchSourceTimer?
 
   nonisolated init() {}

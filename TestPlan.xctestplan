@@ -1,0 +1,19 @@
+{
+  "configurations" : [
+
+  ],
+  "defaultOptions" : {
+    "testInteropMode" : "complete",
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "BLENearbyExchangeCoreTests",
+        "name" : "BLENearbyExchangeCoreTests"
+      }
+    }
+  ],
+  "version" : 1
+}

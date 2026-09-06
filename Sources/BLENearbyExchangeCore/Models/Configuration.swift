@@ -3,9 +3,9 @@ import Foundation
 
 public enum NearbyExchange {
   public struct Configuration: Sendable {
-    var serviceUUID: UUID
-    var distanceThreshold: Float
-    var timeout: TimeInterval
+    public var serviceUUID: UUID
+    public var distanceThreshold: Float
+    public var timeout: TimeInterval
 
     public init(
       serviceUUID: UUID = Configuration.defaultServiceUUID,

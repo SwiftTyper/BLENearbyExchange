@@ -5,20 +5,38 @@ let package = Package(
   name: "BLENearbyExchange",
   platforms: [
     .iOS(.v17),
+    .macOS(.v15),
   ],
   products: [
     .library(name: "BLENearbyExchange", targets: ["BLENearbyExchange"]),
   ],
+  dependencies: [
+    .package(url: "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock", branch: "main"),
+  ],
   targets: [
     .target(
       name: "BLENearbyExchange",
+      dependencies: [
+        "BLENearbyExchangeCore"
+      ],
+      swiftSettings: [
+        .swiftLanguageMode(.v6),
+      ]
+    ),
+    .target(
+      name: "BLENearbyExchangeCore",
+      dependencies: [
+        .product(name: "CoreBluetoothMock", package: "iOS-CoreBluetooth-Mock"),
+      ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
       ]
     ),
     .testTarget(
-      name: "BLENearbyExchangeTests",
-      dependencies: ["BLENearbyExchange"],
+      name: "BLENearbyExchangeCoreTests",
+      dependencies: [
+        "BLENearbyExchangeCore",
+      ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
       ]

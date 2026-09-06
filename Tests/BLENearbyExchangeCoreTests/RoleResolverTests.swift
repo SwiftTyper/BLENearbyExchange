@@ -1,5 +1,5 @@
+@testable import BLENearbyExchangeCore
 import Foundation
-@testable import NearbyExchange
 import Testing
 
 struct RoleResolverTests {

@@ -1,18 +1,19 @@
 import CoreBluetooth
+import CoreBluetoothMock
 import Foundation
 
 @BLEActor
-final class ExchangeSession: TimeoutController {
-  let events = AsyncPassthrough<Event>()
-  private let centralState = AsyncCurrentValue<CBManagerState>(.unknown)
-  private let peripheralState = AsyncCurrentValue<CBManagerState>(.unknown)
+public final class ExchangeSession: TimeoutController {
+  public let events = AsyncPassthrough<Event>()
+  private let centralState = AsyncCurrentValue<CBMManagerState>(.unknown)
+  private let peripheralState = AsyncCurrentValue<CBMManagerState>(.unknown)
 
   private var peripheral: BLEPeripheralManager?
   private var central: BLECentralManager?
   private var ranger: ProximityRanger?
   private let configuration: NearbyExchange.Configuration
 
-  private(set) var isRunning = false
+  public private(set) var isRunning = false
   private var role: ConnectionRole?
   private var payload = Data()
   private var didPeerReceive = false
@@ -24,7 +25,7 @@ final class ExchangeSession: TimeoutController {
   private var received = TransferProgress()
   private var progress: Double = 0
 
-  nonisolated init(
+  public nonisolated init(
     configuration: NearbyExchange.Configuration
   ) {
     self.configuration = configuration
@@ -44,7 +45,8 @@ final class ExchangeSession: TimeoutController {
           ranger: ranger
         )
         self.peripheral?.onStateChange = { [weak self] in
-          self?.peripheralState.send($0)
+          guard let mapped = CBMManagerState(rawValue: $0.rawValue) else { return }
+          self?.peripheralState.send(mapped)
         }
         self.central?.onStateChange = { [weak self] in
           self?.centralState.send($0)
@@ -53,7 +55,7 @@ final class ExchangeSession: TimeoutController {
     }
   }
 
-  func start(payload: Data) async throws {
+  public func start(payload: Data) async throws {
     guard ProximityRanger.isSupported
     else { throw ExchangeError.unsupported }
 
@@ -89,7 +91,7 @@ final class ExchangeSession: TimeoutController {
     try await beginHandshake()
   }
 
-  override func timeoutDidFire() {
+  public override func timeoutDidFire() {
     fail(.timedOut)
   }
 
@@ -122,7 +124,7 @@ final class ExchangeSession: TimeoutController {
   }
 
   private func waitForPoweredOn(
-    _ state: AsyncCurrentValue<CBManagerState>
+    _ state: AsyncCurrentValue<CBMManagerState>
   ) async throws {
     for await value in state.receive() {
       switch value {
@@ -138,7 +140,7 @@ final class ExchangeSession: TimeoutController {
     }
   }
 
-  func terminate(_ control: GATT.Control) async {
+  public func terminate(_ control: GATT.Control) async {
     switch role {
     case .central:
       await withCheckedContinuation { continuation in
@@ -157,7 +159,7 @@ final class ExchangeSession: TimeoutController {
     }
   }
 
-  func stop() {
+  public func stop() {
     ranger?.onDistance = nil
     ranger?.onError = nil
     ranger?.stop()

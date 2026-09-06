@@ -1,11 +1,11 @@
 import Foundation
 
 @globalActor
-actor BLEActor {
-  static let queue = DispatchSerialQueue(label: "ble-actor")
-  static let shared = BLEActor()
+public actor BLEActor {
+  static public let queue = DispatchSerialQueue(label: "ble-actor")
+  static public let shared = BLEActor()
 
-  nonisolated var unownedExecutor: UnownedSerialExecutor {
+  nonisolated public var unownedExecutor: UnownedSerialExecutor {
     Self.queue.asUnownedSerialExecutor()
   }
 
