@@ -12,15 +12,20 @@ final class BLECentralManagerTests: XCTestCase {
     let central = await makeSUT(peer: peer)
 
     let roleReceived = expectation(description: "a role was resolved")
-
+    let connected = expectation(description: "the peer connected")
+    
     central.onRoleReceived = { role in
       XCTAssertEqual(role, .central)
       roleReceived.fulfill()
     }
+    
+    central.onConnected = { connected.fulfill() }
 
     central.startScanning(nonce: 2)
-
-    await fulfillment(of: [roleReceived], timeout: 2)
+    
+    await fulfillment(of: [roleReceived, connected], timeout: 2)
+    
+    XCTAssertTrue(peer.isConnected)
   }
 
   func test_higherPeerNonceMakesUsThePeripheral() async {
@@ -29,15 +34,19 @@ final class BLECentralManagerTests: XCTestCase {
     let central = await makeSUT(peer: peer)
 
     let roleReceived = expectation(description: "a role was resolved")
+    let notConnected = expectation(description: "the peer didn't connect")
+    notConnected.isInverted = true
 
     central.onRoleReceived = { role in
       XCTAssertEqual(role, .peripheral)
       roleReceived.fulfill()
     }
+    
+    central.onConnected = { notConnected.fulfill() }
 
     central.startScanning(nonce: 2)
-
-    await fulfillment(of: [roleReceived], timeout: 2)
+    
+    await fulfillment(of: [roleReceived, notConnected], timeout: 2)
   }
 
   func test_identicalNonceIsReportedAsACollision() async {

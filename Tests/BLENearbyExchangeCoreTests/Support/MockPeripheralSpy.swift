@@ -13,17 +13,12 @@ final class MockPeripheralSpy: @unchecked Sendable {
   struct State {
     var handshakeToken: Data?
     var controls: [GATT.Control] = []
-    var payload: Data?
-    var receivedFrames: [Data] = []
-    var notifying: Set<String> = []
     var reassembler = Reassembler()
-    var serviceDiscoveryError: Error?
   }
   
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
     nonce: UInt64,
-    servesExchange: Bool = true,
     mtu: Int = 64
   ) {
     let name = RoleResolver.encode(nonce).base64EncodedString()
@@ -31,7 +26,6 @@ final class MockPeripheralSpy: @unchecked Sendable {
     self.init(
       configuration: configuration,
       advertisedName: name,
-      servesExchange: servesExchange,
       mtu: mtu
     )
   }
@@ -39,7 +33,6 @@ final class MockPeripheralSpy: @unchecked Sendable {
   init(
     configuration: NearbyExchange.Configuration = .init(),
     advertisedName: String,
-    servesExchange: Bool = true,
     mtu: Int = 64
   ) {
     self.mtu = mtu
@@ -50,12 +43,6 @@ final class MockPeripheralSpy: @unchecked Sendable {
       CBMCharacteristicMock(type: GATT.control.cbuuid, properties: [.write, .notify])
     ]
     
-    let service = CBMServiceMock(
-      type: servesExchange ? configuration.serviceUUID.cbuuid : UUID().cbuuid,
-      primary: true,
-      characteristics: self.characteristics
-    )
-
     self.spec = CBMPeripheralSpec
       .simulatePeripheral(proximity: .immediate)
       .advertising(
@@ -68,7 +55,13 @@ final class MockPeripheralSpy: @unchecked Sendable {
       )
       .connectable(
         name: "peer",
-        services: [service],
+        services: [
+          CBMServiceMock(
+            type: configuration.serviceUUID.cbuuid,
+            primary: true,
+            characteristics: self.characteristics
+          )
+        ],
         delegate: self,
         connectionInterval: 0.01,
         mtu: mtu
@@ -113,16 +106,6 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
 
   func peripheral(
     _: CBMPeripheralSpec,
-    didReceiveServiceDiscoveryRequest _: [CBMUUID]?
-  ) -> Result<Void, Error> {
-//    if let error = serviceDiscoveryError {
-//      return .failure(error)
-//    }
-    return .success(())
-  }
-
-  func peripheral(
-    _: CBMPeripheralSpec,
     didReceiveWriteRequestFor characteristic: CBMCharacteristicMock,
     data: Data
   ) -> Result<Void, Error> {
@@ -156,14 +139,8 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     guard characteristic.uuid == GATT.payload.cbuuid
     else { return }
 
-    let full = state.withLock { state -> Data? in
-      state.receivedFrames.append(data)
-
-      guard let full = try? state.reassembler.add(frame: data)
-      else { return nil }
-
-      state.payload = full
-      return full
+    let full = state.withLock { state in
+      try? state.reassembler.add(frame: data)
     }
 
     if let full {
@@ -173,30 +150,8 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
 
   func peripheral(
     _: CBMPeripheralSpec,
-    didReceiveSetNotifyRequest _: Bool,
-    for _: CBMCharacteristicMock
-  ) -> Result<Void, Error> {
-    .success(())
-  }
-
-  func peripheral(
-    _: CBMPeripheralSpec,
     didDisconnect error: Error?
   ) {
     onDisconnect?(error)
-  }
-
-  func peripheral(
-    _: CBMPeripheralSpec,
-    didUpdateNotificationStateFor characteristic: CBMCharacteristicMock,
-    error _: Error?
-  ) {
-    state.withLock { [uuid = characteristic.uuid, isNotifying = characteristic.isNotifying] in
-      if isNotifying {
-        $0.notifying.insert(uuid.uuidString)
-      } else {
-        $0.notifying.remove(uuid.uuidString)
-      }
-    }
   }
 }

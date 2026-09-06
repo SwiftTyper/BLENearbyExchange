@@ -8,8 +8,7 @@ final class MockRanger: ProximityRanger {
   var onStartRanging: ((Data) -> Void)?
 
   private(set) var peerToken: Data?
-  private(set) var isStopped = false
-  
+
   init(
     localToken: Data? = Data("local-token".utf8)
   ) {
@@ -26,10 +25,6 @@ final class MockRanger: ProximityRanger {
     }
     self.peerToken = peerToken
     onStartRanging?(peerToken)
-  }
-
-  override func stop() {
-    isStopped = true
   }
 }
 

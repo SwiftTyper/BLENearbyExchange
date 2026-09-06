@@ -417,5 +417,4 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       return
     }
   }
-
 }
