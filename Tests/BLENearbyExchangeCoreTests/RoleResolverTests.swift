@@ -16,10 +16,12 @@ struct RoleResolverTests {
   }
 
   @Test func bothSidesAgreeOnOppositeRoles() {
-    let a = RoleResolver.makeNonce()
-    var b = RoleResolver.makeNonce()
+    let resolver = RoleResolver()
+    
+    let a = resolver.makeNonce()
+    var b = resolver.makeNonce()
     while a == b {
-      b = RoleResolver.makeNonce()
+      b = resolver.makeNonce()
     }
 
     let roleA = RoleResolver.resolve(myNonce: a, peerNonce: b)
@@ -29,7 +31,7 @@ struct RoleResolverTests {
   }
 
   @Test func nonceRoundTripsThroughEncoding() {
-    let nonce = RoleResolver.makeNonce()
+    let nonce = RoleResolver().makeNonce()
     let decoded = RoleResolver.decode(RoleResolver.encode(nonce))
     #expect(decoded == nonce)
   }

@@ -5,11 +5,11 @@ import Foundation
 #endif
 
 @BLEActor
-class ProximityRanger: NSObject {
+public class ProximityRanger: NSObject {
   var onDistance: ((Float) -> Void)?
   var onError: ((Error) -> Void)?
-
-  static var isSupported: Bool {
+  
+  var isSupported: Bool {
     #if !os(macOS)
       return NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
     #else

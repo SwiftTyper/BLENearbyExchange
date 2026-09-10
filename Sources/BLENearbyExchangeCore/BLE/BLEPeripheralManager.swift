@@ -1,23 +1,24 @@
-import CoreBluetooth
+import CoreBluetoothMock
 import Foundation
 
 @BLEActor
 final class BLEPeripheralManager: NSObject {
   private let configuration: NearbyExchange.Configuration
 
-  private var manager: CBPeripheralManager!
-  private var handshakeChar: CBMutableCharacteristic!
-  private var payloadChar: CBMutableCharacteristic!
-  private var controlChar: CBMutableCharacteristic!
+  private var manager: CBMPeripheralManager!
+  private var handshakeChar: CBMMutableCharacteristic!
+  private var payloadChar: CBMMutableCharacteristic!
+  private var controlChar: CBMMutableCharacteristic!
+  
   private var advertisingContinuation: CheckedContinuation<Void, Error>?
   private var serviceContinuation: CheckedContinuation<Void, Error>?
   private var onTerminateSent: (() -> Void)?
   private var pendingTerminate: GATT.Control?
   private var isTerminating = false
   private var ranger: ProximityRanger
-  private var subscribedCentral: CBCentral?
+  private var subscribedCentral: CBMCentral?
 
-  var onStateChange: ((CBManagerState) -> Void)?
+  var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
   var onRoleConfirmed: (() -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
@@ -35,36 +36,39 @@ final class BLEPeripheralManager: NSObject {
 
   init(
     configuration: NearbyExchange.Configuration,
-    ranger: ProximityRanger
+    ranger: ProximityRanger,
+    forceMock: Bool
   ) {
     self.configuration = configuration
     self.ranger = ranger
+    
     super.init()
 
-    manager = CBPeripheralManager(
+    manager = CBMPeripheralManagerFactory.instance(
       delegate: self,
       queue: BLEActor.queue,
-      options: nil
+      options: nil,
+      forceMock: forceMock
     )
   }
 
   func startAdvertising(nonce: UInt64) async throws {
     manager.removeAllServices()
 
-    handshakeChar = CBMutableCharacteristic(
+    handshakeChar = CBMMutableCharacteristic(
       type: GATT.handshake.cbuuid, properties: [.notify, .write],
       value: nil, permissions: [.writeable]
     )
-    payloadChar = CBMutableCharacteristic(
+    payloadChar = CBMMutableCharacteristic(
       type: GATT.payload.cbuuid, properties: [.writeWithoutResponse, .notify],
       value: nil, permissions: [.writeable]
     )
-    controlChar = CBMutableCharacteristic(
+    controlChar = CBMMutableCharacteristic(
       type: GATT.control.cbuuid, properties: [.write, .notify],
       value: nil, permissions: [.writeable]
     )
 
-    let service = CBMutableService(
+    let service = CBMMutableService(
       type: configuration.serviceUUID.cbuuid,
       primary: true
     )
@@ -78,8 +82,8 @@ final class BLEPeripheralManager: NSObject {
     try await withCheckedThrowingContinuation { continuation in
       advertisingContinuation = continuation
       manager.startAdvertising([
-        CBAdvertisementDataServiceUUIDsKey: [configuration.serviceUUID.cbuuid],
-        CBAdvertisementDataLocalNameKey: RoleResolver.encode(nonce).base64EncodedString(),
+        CBMAdvertisementDataServiceUUIDsKey: [configuration.serviceUUID.cbuuid],
+        CBMAdvertisementDataLocalNameKey: RoleResolver.encode(nonce).base64EncodedString(),
       ])
     }
   }
@@ -190,15 +194,15 @@ final class BLEPeripheralManager: NSObject {
   }
 }
 
-extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
+extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
   func peripheralManagerDidUpdateState(
-    _ peripheral: CBPeripheralManager
+    _ peripheral: CBMPeripheralManager
   ) {
     onStateChange?(peripheral.state)
   }
 
   func peripheralManagerDidStartAdvertising(
-    _: CBPeripheralManager,
+    _: CBMPeripheralManager,
     error: Error?
   ) {
     if let error {
@@ -212,8 +216,8 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
   
   func peripheralManager(
-    _: CBPeripheralManager,
-    didAdd _: CBService,
+    _: CBMPeripheralManager,
+    didAdd _: CBMService,
     error: Error?
   ) {
     if let error {
@@ -227,9 +231,9 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
 
   func peripheralManager(
-    _: CBPeripheralManager,
-    central: CBCentral,
-    didSubscribeTo _: CBCharacteristic
+    _: CBMPeripheralManager,
+    central: CBMCentral,
+    didSubscribeTo _: CBMCharacteristic
   ) {
     subscribedCentral = central
     onRoleConfirmed?()
@@ -237,9 +241,9 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
 
   func peripheralManager(
-    _: CBPeripheralManager,
-    central _: CBCentral,
-    didUnsubscribeFrom _: CBCharacteristic
+    _: CBMPeripheralManager,
+    central _: CBMCentral,
+    didUnsubscribeFrom _: CBMCharacteristic
   ) {
     subscribedCentral = nil
     flushTerminate()
@@ -247,8 +251,8 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
 
   func peripheralManager(
-    _ peripheral: CBPeripheralManager,
-    didReceiveWrite requests: [CBATTRequest]
+    _ peripheral: CBMPeripheralManager,
+    didReceiveWrite requests: [CBMATTRequest]
   ) {
     for request in requests {
       switch request.characteristic.uuid {
@@ -296,7 +300,7 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
           for: controlChar,
           onSubscribedCentrals: nil
         )
-
+        
         onPayloadReceived?(full)
 
       case GATT.control.cbuuid:
@@ -328,7 +332,7 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
 
   func peripheralManagerIsReady(
-    toUpdateSubscribers _: CBPeripheralManager
+    toUpdateSubscribers _: CBMPeripheralManager
   ) {
     if let pendingTerminate {
       guard sendTerminateFrame(pendingTerminate) else { return }
