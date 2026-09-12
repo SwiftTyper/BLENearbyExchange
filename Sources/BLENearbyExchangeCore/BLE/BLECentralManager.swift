@@ -15,9 +15,9 @@ final class BLECentralManager: NSObject {
   private var controlChar: CBMCharacteristic?
   private var peripheral: CBMPeripheral?
 
-  var onStateChange: ((CBMManagerState) -> Void)?
-
   var payload = Data()
+  
+  var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
   var onRoleReceived: ((_ role: ConnectionRole?) -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
@@ -26,12 +26,11 @@ final class BLECentralManager: NSObject {
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
 
-  private var onTerminateSent: (() -> Void)?
-  private var isTerminating = false
-  private var outbox: [Data] = []
+  private var terminationCompletion: (() -> Void)?
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
+  private let transferQueue: UnlimitedTransferQueue = .init()
 
   init(
     configuration: NearbyExchange.Configuration,
@@ -55,7 +54,7 @@ final class BLECentralManager: NSObject {
 
     manager.scanForPeripherals(
       withServices: [configuration.serviceUUID.cbuuid],
-      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
+      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true] /// TODO
     )
   }
 
@@ -66,23 +65,26 @@ final class BLECentralManager: NSObject {
     guard let peripheral, let controlChar
     else { return completion() }
 
-    isTerminating = true
-    outbox.removeAll()
-    onTerminateSent = completion
-
-    peripheral.writeValue(
-      Data([control.rawValue]),
-      for: controlChar,
-      type: .withResponse
-    )
-  }
-
-  private func flushTerminate() {
-    guard let completion = onTerminateSent
-    else { return }
-
-    onTerminateSent = nil
-    completion()
+    terminationCompletion = completion
+    
+    transferQueue.clear()
+    
+    transferQueue.add { [weak self] in
+      guard
+        let self,
+        peripheral.canSendWriteWithoutResponse
+      else { return false }
+      
+      peripheral.writeValue(
+        Data([control.rawValue]),
+        for: controlChar,
+        type: .withResponse
+      )
+      
+      if self.terminationCompletion != nil { completion() }
+      
+      return true
+    }
   }
 
   func stop() {
@@ -101,15 +103,15 @@ final class BLECentralManager: NSObject {
     payloadChar = nil
     controlChar = nil
     nonce = nil
+    
+    transferQueue.clear()
+    terminationCompletion = nil
 
-    outbox.removeAll()
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
     payload = Data()
 
-    onTerminateSent = nil
-    isTerminating = false
     onPayloadReceived = nil
     onRoleReceived = nil
     onPeerReceivedDataConfirmation = nil
@@ -120,30 +122,36 @@ final class BLECentralManager: NSObject {
   }
 
   func send(payload: Data) {
-    guard !isTerminating, let peripheral else { return }
+    guard
+      let peripheral,
+      let payloadChar
+    else { return }
+    
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
-    outbox = Chunker.chunk(payload, mtu: mtu)
+    
     sentBytes = 0
     payloadBytes = payload.count
-    onSendProgress?(sendProgress)
-    drainOutbox()
+    
+    for chunk in Chunker.chunk(payload, mtu: mtu) {
+      transferQueue.add { [weak self] in
+        guard
+          let self,
+          peripheral.canSendWriteWithoutResponse
+        else { return false }
+        
+        peripheral.writeValue(chunk, for: payloadChar, type: .withoutResponse)
+        
+        sentBytes += chunk.count - Chunker.headerSize
+        
+        onSendProgress?(sendProgress)
+        
+        return true
+      }
+    }
   }
 
   func confirmSent() {
     sentBytes = payloadBytes
-    onSendProgress?(sendProgress)
-  }
-
-  private func drainOutbox() {
-    guard !isTerminating, let peripheral, let payloadChar, !outbox.isEmpty
-    else { return }
-
-    while !outbox.isEmpty, peripheral.canSendWriteWithoutResponse {
-      let frame = outbox.removeFirst()
-      peripheral.writeValue(frame, for: payloadChar, type: .withoutResponse)
-      sentBytes += frame.count - Chunker.headerSize
-    }
-
     onSendProgress?(sendProgress)
   }
 
@@ -200,7 +208,6 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     didFailToConnect _: CBMPeripheral,
     error: Error?
   ) {
-    flushTerminate()
     onError?(.connectionFailed(error?.localizedDescription ?? "The peer is unreachable."))
   }
 
@@ -209,7 +216,11 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     didDisconnectPeripheral _: CBMPeripheral,
     error _: Error?
   ) {
-    flushTerminate()
+    if let terminationCompletion {
+      terminationCompletion()
+      self.terminationCompletion = nil
+    }
+    
     onError?(.disconnected)
   }
 
@@ -221,8 +232,12 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     error _: Error?
   ) {
     guard !isReconnecting else { return }
+    
+    if let terminationCompletion {
+      terminationCompletion()
+      self.terminationCompletion = nil
+    }
 
-    flushTerminate()
     onError?(.disconnected)
   }
 }
@@ -288,22 +303,8 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     peripheral.setNotifyValue(true, for: handshakeChar)
   }
 
-  func peripheral(
-    _: CBMPeripheral,
-    didWriteValueFor characteristic: CBMCharacteristic,
-    error: (any Error)?
-  ) {
-    if characteristic.uuid == GATT.control.cbuuid {
-      flushTerminate()
-    }
-
-    if let error {
-      onError?(.transferFailed(error.localizedDescription))
-    }
-  }
-
   func peripheralIsReady(toSendWriteWithoutResponse _: CBMPeripheral) {
-    drainOutbox()
+    transferQueue.resume()
   }
 
   func peripheral(
@@ -340,11 +341,20 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       return
     }
 
-    peripheral?.writeValue(
-      token,
-      for: handshakeChar,
-      type: .withResponse
-    )
+    transferQueue.add { [weak self] in
+      guard
+        let self,
+        peripheral?.canSendWriteWithoutResponse == true
+      else { return false }
+      
+      self.peripheral?.writeValue(
+        token,
+        for: handshakeChar,
+        type: .withResponse
+      )
+      
+      return true
+    }
 
     onConnected?()
   }
@@ -378,12 +388,19 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       else { return }
 
       onPayloadReceived?(full)
-
-      peripheral.writeValue(
-        Data([GATT.Control.done.rawValue]),
-        for: controlChar,
-        type: .withResponse
-      )
+      
+      transferQueue.add {
+        guard peripheral.canSendWriteWithoutResponse
+        else { return false }
+        
+        peripheral.writeValue(
+          Data([GATT.Control.done.rawValue]),
+          for: controlChar,
+          type: .withResponse
+        )
+        
+        return true
+      }
 
     case GATT.control.cbuuid:
       guard

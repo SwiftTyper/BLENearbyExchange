@@ -32,7 +32,7 @@ final class BLEPeripheralManager: NSObject {
   
   private var centralSubscribedCharacteristics: Set<String> = []
   private var terminationCompletion: (() -> Void)? = nil
-  private let workQueue: BLEUnlimitedWorkQueue = .init()
+  private let transferQueue: UnlimitedTransferQueue = .init()
 
   init(
     configuration: NearbyExchange.Configuration,
@@ -100,9 +100,9 @@ final class BLEPeripheralManager: NSObject {
   ) {
     self.terminationCompletion = completion
     
-    workQueue.clear()
+    transferQueue.clear()
 
-    workQueue.add { [weak self] in
+    transferQueue.add { [weak self] in
       guard let self else { return false }
       
       let result = manager.updateValue(
@@ -135,7 +135,8 @@ final class BLEPeripheralManager: NSObject {
     controlChar = nil
     subscribedCentral = nil
 
-    workQueue.clear()
+    transferQueue.clear()
+    terminationCompletion = nil
     
     sentBytes = 0
     payloadBytes = 0
@@ -159,8 +160,8 @@ final class BLEPeripheralManager: NSObject {
     payloadBytes = payload.count
     
     for chunk in Chunker.chunk(payload, mtu: mtu) {
-      workQueue.add { [weak self] in
-        guard let self else { return true }
+      transferQueue.add { [weak self] in
+        guard let self else { return false }
         
         let result = self.manager.updateValue(
           chunk,
@@ -284,8 +285,8 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
 
         peripheral.respond(to: request, withResult: .success)
         
-        workQueue.add { [weak self] in
-          guard let self else { return true }
+        transferQueue.add { [weak self] in
+          guard let self else { return false }
           
           return peripheral.updateValue(
             localToken,
@@ -310,8 +311,8 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         guard let full
         else { continue }
 
-        workQueue.add { [weak self] in
-          guard let self else { return true }
+        transferQueue.add { [weak self] in
+          guard let self else { return false }
           
           return peripheral.updateValue(
             Data([GATT.Control.done.rawValue]),
@@ -353,38 +354,6 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
   func peripheralManagerIsReady(
     toUpdateSubscribers _: CBMPeripheralManager
   ) {
-    workQueue.resume()
-  }
-}
-
-@BLEActor
-class BLEUnlimitedWorkQueue {
-  typealias WorkItem = () -> Bool
-  
-  private var stack: [WorkItem] = []
-  
-  init() {}
-  
-  func clear() {
-    stack = []
-  }
-  
-  func add(value: @escaping WorkItem) {
-    stack.append(value)
-    
-    if stack.count == 1 {
-      resume()
-    }
-  }
-  
-  func resume() {
-    while !stack.isEmpty {
-      guard let workItem = stack.popLast() else { return }
-      
-      if !workItem() {
-        stack.append(workItem)
-        return
-      }
-    }
+    transferQueue.resume()
   }
 }
