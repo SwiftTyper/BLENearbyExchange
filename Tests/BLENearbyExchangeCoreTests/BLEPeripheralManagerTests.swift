@@ -159,20 +159,51 @@ final class BLEPeripheralManagerTests: XCTestCase {
     
     await fulfillment(of: [payloadReceived], timeout: 1.0)
   }
+  
+  func test_centralSendsDone_peripheralReceivesConfirmation() async throws {
+    let peripheral = await makeSUT()
+    let peer = MockCentralSpy()
+    
+    let characterisitcs = try await connect(peer, to: peripheral)
+    
+    guard let control = characterisitcs.first(where: { $0.uuid == GATT.control.cbuuid })
+    else {
+      XCTFail("missing control characteristic")
+      return
+    }
+    
+    let doneCommendSent = expectation(description: "done command sent")
+    
+    let doneCommend = Data([GATT.Control.done.rawValue])
+    
+    peer.spec.simulateWriteRequest(doneCommend, for: control, withResponse: true) { result in
+      switch result {
+      case .success:
+        doneCommendSent.fulfill()
+        
+      case .failure(let failure):
+        XCTFail("\(failure.localizedDescription)")
+      }
+    }
+    
+    let receivedDoneCommend = expectation(description: "received done command")
+    
+    peripheral.onPeerReceivedDataConfirmation = {
+      receivedDoneCommend.fulfill()
+    }
+    
+    await fulfillment(of: [doneCommendSent, receivedDoneCommend], timeout: 1.0)
+  }
+  
+  func test_peripheralsPayloadQueueFull_doesntDropOtherCommands() {
+    
+  }
 
   func test_centralDisconnection_propagatesError() async {
 
   }
 
   func test_periphalReceivesPeersToken_startsRanging() async {
-
-  }
-
-  func test_centralSendsControl_peripheralPropagesError() async {
-
-  }
-
-  func test_centralReceivedFullPayloadSendsDone_peripheralReceivesConfirmation() async {
 
   }
 
