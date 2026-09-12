@@ -19,7 +19,7 @@ final class MockCentralSpy: @unchecked Sendable {
   }
 
   var onControl: ((GATT.Control) -> Void)?
-
+  var onPayload: ((Data) -> Void)?
   var updates: [Update] { state.withLock { $0 } }
 
   func subscribe(to characteristics: [CBMMutableCharacteristic]) {
@@ -38,6 +38,7 @@ extension MockCentralSpy: CBMCentralSpecDelegate {
     switch characteristic.uuid {
     case GATT.payload.cbuuid:
       state.withLock { $0.append(.payload(value)) }
+      onPayload?(value)
 
     case GATT.control.cbuuid:
       guard
@@ -89,12 +90,40 @@ final class BLEPeripheralManagerTests: XCTestCase {
     XCTAssertLessThan(payloadFrames.count, frameCount)
     XCTAssertEqual(peer.updates.last, .control(.cancelled))
   }
-
-  func test_centralDisconnection_propagatesError() async {
-
+  
+  func test_send_transfersFullPayloadToPeer() async throws {
+    let peripheral = await makeSUT()
+    let peer = MockCentralSpy()
+    
+    try await connect(peer, to: peripheral)
+    
+    let payload = Data(repeating: 0x00, count: 4000)
+    let frameCount = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength).count
+    
+    peripheral.send(payload: payload)
+    
+    let fullyEnqueued = expectation(description: "the full payload was enqueued")
+    
+    peripheral.onSendProgress = { progress in
+      guard progress.bytes == payload.count else { return }
+      fullyEnqueued.fulfill()
+    }
+    
+    let fullyReceivedPayload = expectation(description: "the full payload was received by the peer")
+    fullyReceivedPayload.expectedFulfillmentCount = frameCount
+    
+    peer.onPayload = { _ in
+      fullyReceivedPayload.fulfill()
+    }
+    
+    await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 1.0)
+    
+    let peerReceivedFrameCount = peer.updates.filter({ if case .payload = $0 { true } else { false } }).count
+    
+    XCTAssertEqual(frameCount, peerReceivedFrameCount)
   }
 
-  func test_send_transfersFullPayload() async {
+  func test_centralDisconnection_propagatesError() async {
 
   }
 
