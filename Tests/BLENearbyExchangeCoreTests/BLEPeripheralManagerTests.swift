@@ -122,16 +122,49 @@ final class BLEPeripheralManagerTests: XCTestCase {
     
     XCTAssertEqual(frameCount, peerReceivedFrameCount)
   }
+  
+  func test_centralSends_peripheralReceivesFullPayload() async throws {
+    let peripheral = await makeSUT()
+    let peer = MockCentralSpy()
+    
+    let characterisitcs = try await connect(peer, to: peripheral)
+    
+    guard let payloadChar = characterisitcs.first(where: { $0.uuid == GATT.payload.cbuuid })
+    else {
+      XCTFail("missing payload characterisitc")
+      return
+    }
+    
+    let payload = Data(repeating: 0x00, count: 4000)
+    let chunks = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength)
+    
+    for chunk in chunks {
+      peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
+        switch result {
+        case .success:
+          break
+          
+        case .failure:
+          XCTFail("Failed to queue write request")
+        }
+      }
+    }
+    
+    let payloadReceived = expectation(description: "full payload received")
+    
+    peripheral.onPayloadReceived = { receivedPayload in
+      XCTAssertEqual(payload, receivedPayload)
+      payloadReceived.fulfill()
+    }
+    
+    await fulfillment(of: [payloadReceived], timeout: 1.0)
+  }
 
   func test_centralDisconnection_propagatesError() async {
 
   }
 
   func test_periphalReceivesPeersToken_startsRanging() async {
-
-  }
-
-  func test_centralSendsPayload_peripheralRebuildsPayload() async {
 
   }
 
@@ -171,10 +204,11 @@ extension BLEPeripheralManagerTests {
     return peripheral
   }
 
+  @discardableResult
   private func connect(
     _ peer: MockCentralSpy,
     to peripheral: BLEPeripheralManager
-  ) async throws {
+  ) async throws -> [CBMMutableCharacteristic]{
     try await peripheral.startAdvertising(nonce: 1)
 
     let subscribed = expectation(description: "the peer subscribed")
@@ -193,5 +227,7 @@ extension BLEPeripheralManagerTests {
     peer.subscribe(to: characteristics)
     
     await fulfillment(of: [subscribed, roleConfirmed], timeout: 0.2)
+    
+    return characteristics
   }
 }
