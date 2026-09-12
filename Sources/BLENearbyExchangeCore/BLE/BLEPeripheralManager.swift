@@ -33,6 +33,8 @@ final class BLEPeripheralManager: NSObject {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
+  
+  private var centralSubscribedCharacteristics: Set<String> = []
 
   init(
     configuration: NearbyExchange.Configuration,
@@ -56,16 +58,22 @@ final class BLEPeripheralManager: NSObject {
     manager.removeAllServices()
 
     handshakeChar = CBMMutableCharacteristic(
-      type: GATT.handshake.cbuuid, properties: [.notify, .write],
-      value: nil, permissions: [.writeable]
+      type: GATT.handshake.cbuuid,
+      properties: [.notify, .write],
+      value: nil,
+      permissions: [.writeable]
     )
     payloadChar = CBMMutableCharacteristic(
-      type: GATT.payload.cbuuid, properties: [.writeWithoutResponse, .notify],
-      value: nil, permissions: [.writeable]
+      type: GATT.payload.cbuuid,
+      properties: [.writeWithoutResponse, .notify],
+      value: nil,
+      permissions: [.writeable]
     )
     controlChar = CBMMutableCharacteristic(
-      type: GATT.control.cbuuid, properties: [.write, .notify],
-      value: nil, permissions: [.writeable]
+      type: GATT.control.cbuuid,
+      properties: [.write, .notify],
+      value: nil,
+      permissions: [.writeable]
     )
 
     let service = CBMMutableService(
@@ -233,21 +241,32 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
   func peripheralManager(
     _: CBMPeripheralManager,
     central: CBMCentral,
-    didSubscribeTo _: CBMCharacteristic
+    didSubscribeTo characteristic: CBMCharacteristic
   ) {
-    subscribedCentral = central
-    onRoleConfirmed?()
-    onConnected?()
+    let requiredGATTIds = [GATT.handshake.cbuuid, GATT.payload.cbuuid, GATT.control.cbuuid]
+      .map(\.uuidString)
+    
+    self.centralSubscribedCharacteristics.insert(characteristic.uuid.uuidString)
+    
+    if self.centralSubscribedCharacteristics.isSuperset(of: requiredGATTIds) {
+      subscribedCentral = central
+      onRoleConfirmed?()
+      onConnected?()
+    }
   }
 
   func peripheralManager(
     _: CBMPeripheralManager,
     central _: CBMCentral,
-    didUnsubscribeFrom _: CBMCharacteristic
+    didUnsubscribeFrom characterisitc: CBMCharacteristic
   ) {
-    subscribedCentral = nil
-    flushTerminate()
-    onError?(.disconnected)
+    self.centralSubscribedCharacteristics.remove(characterisitc.uuid.uuidString)
+    
+    if centralSubscribedCharacteristics.isEmpty {
+      subscribedCentral = nil
+      flushTerminate()
+      onError?(.disconnected)
+    }
   }
 
   func peripheralManager(
