@@ -195,8 +195,69 @@ final class BLEPeripheralManagerTests: XCTestCase {
     await fulfillment(of: [doneCommendSent, receivedDoneCommend], timeout: 1.0)
   }
   
-  func test_peripheralsPayloadQueueFull_doesntDropOtherCommands() {
+  func test_peripheralsPayloadOutgoingQueueFull_doesntDropOtherOutgoingCommands() async throws {
+    let peripheral = await makeSUT()
+    let peer = MockCentralSpy()
+
+    let characterisitcs = try await connect(peer, to: peripheral)
+
+    guard let payloadChar = characterisitcs.first(where: { $0.uuid == GATT.payload.cbuuid })
+    else {
+      XCTFail("missing payload characterisitc")
+      return
+    }
+
+    let outgoingPayload = Data(repeating: 0x00, count: 4000)
+    let outgoingFrameCount = Chunker.chunk(outgoingPayload, mtu: peer.spec.maximumUpdateValueLength).count
+
+    let transferStarted = expectation(description: "the peripheral's update queue is full")
+
+    peripheral.onSendProgress = { progress in
+      guard progress.bytes > 0, progress.bytes < outgoingPayload.count else { return }
+      peripheral.onSendProgress = nil
+      transferStarted.fulfill()
+    }
+
+    peripheral.send(payload: outgoingPayload)
+
+    await fulfillment(of: [transferStarted], timeout: 1.0)
     
+    /// this is significatly smaller than the outgoing payload so
+    /// that it finished way earlier and we try to send done during the outgoing payload transfer
+    let incomingPayload = Data(repeating: 0x01, count: 100)
+
+    for chunk in Chunker.chunk(incomingPayload, mtu: peer.spec.maximumUpdateValueLength) {
+      peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
+        if case .failure(let failure) = result {
+          XCTFail("\(failure.localizedDescription)")
+        }
+      }
+    }
+
+    let payloadReceived = expectation(description: "the peripheral received the incoming payload")
+
+    peripheral.onPayloadReceived = { receivedPayload in
+      XCTAssertEqual(incomingPayload, receivedPayload)
+      payloadReceived.fulfill()
+    }
+
+    let doneReceived = expectation(description: "the peer received the done control")
+
+    peer.onControl = { control in
+      XCTAssertEqual(control, .done)
+      doneReceived.fulfill()
+    }
+
+    let outgoingPayloadReceived = expectation(description: "the peer received the full outgoing payload")
+    outgoingPayloadReceived.expectedFulfillmentCount = outgoingFrameCount
+
+    peer.onPayload = { _ in
+      outgoingPayloadReceived.fulfill()
+    }
+
+    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 3.0)
+
+    XCTAssertTrue(peer.updates.contains(.control(.done)))
   }
 
   func test_centralDisconnection_propagatesError() async {

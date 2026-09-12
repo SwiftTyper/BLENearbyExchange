@@ -12,9 +12,6 @@ final class BLEPeripheralManager: NSObject {
   
   private var advertisingContinuation: CheckedContinuation<Void, Error>?
   private var serviceContinuation: CheckedContinuation<Void, Error>?
-  private var onTerminateSent: (() -> Void)?
-  private var pendingTerminate: GATT.Control?
-  private var isTerminating = false
   private var ranger: ProximityRanger
   private var subscribedCentral: CBMCentral?
 
@@ -29,12 +26,13 @@ final class BLEPeripheralManager: NSObject {
 
   var payload = Data()
 
-  private var outbox: [Data] = []
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
   
   private var centralSubscribedCharacteristics: Set<String> = []
+  private var terminationCompletion: (() -> Void)? = nil
+  private let workQueue: BLEUnlimitedWorkQueue = .init()
 
   init(
     configuration: NearbyExchange.Configuration,
@@ -100,36 +98,25 @@ final class BLEPeripheralManager: NSObject {
     _ control: GATT.Control,
     completion: @escaping () -> Void
   ) {
-    guard subscribedCentral != nil, controlChar != nil
-    else { return completion() }
+    self.terminationCompletion = completion
+    
+    workQueue.clear()
 
-    isTerminating = true
-    outbox.removeAll()
-
-    if sendTerminateFrame(control) {
-      completion()
-    } else {
-      pendingTerminate = control
-      onTerminateSent = completion
+    workQueue.add { [weak self] in
+      guard let self else { return false }
+      
+      let result = manager.updateValue(
+        Data([control.rawValue]),
+        for: self.controlChar,
+        onSubscribedCentrals: nil
+      )
+      
+      if result && self.terminationCompletion != nil {
+        completion()
+      }
+      
+      return result
     }
-  }
-
-  private func sendTerminateFrame(_ control: GATT.Control) -> Bool {
-    manager.updateValue(
-      Data([control.rawValue]),
-      for: controlChar,
-      onSubscribedCentrals: nil
-    )
-  }
-
-  private func flushTerminate() {
-    pendingTerminate = nil
-
-    guard let completion = onTerminateSent
-    else { return }
-
-    onTerminateSent = nil
-    completion()
   }
 
   func stop() {
@@ -148,15 +135,13 @@ final class BLEPeripheralManager: NSObject {
     controlChar = nil
     subscribedCentral = nil
 
-    outbox.removeAll()
+    workQueue.clear()
+    
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
     payload = Data()
 
-    onTerminateSent = nil
-    pendingTerminate = nil
-    isTerminating = false
     onPayloadReceived = nil
     onRoleConfirmed = nil
     onPeerReceivedDataConfirmation = nil
@@ -167,33 +152,35 @@ final class BLEPeripheralManager: NSObject {
   }
 
   func send(payload: Data) {
-    guard !isTerminating, let mtu = subscribedCentral?.maximumUpdateValueLength
+    guard let mtu = subscribedCentral?.maximumUpdateValueLength
     else { return }
-
-    outbox = Chunker.chunk(payload, mtu: mtu)
+    
     sentBytes = 0
     payloadBytes = payload.count
-    onSendProgress?(sendProgress)
-    drainOutbox()
+    
+    for chunk in Chunker.chunk(payload, mtu: mtu) {
+      workQueue.add { [weak self] in
+        guard let self else { return true }
+        
+        let result = self.manager.updateValue(
+          chunk,
+          for: self.payloadChar,
+          onSubscribedCentrals: nil
+        )
+        
+        if result {
+          sentBytes += chunk.count - Chunker.headerSize
+        }
+        
+        self.onSendProgress?(sendProgress)
+        
+        return result
+      }
+    }
   }
 
   func confirmSent() {
     sentBytes = payloadBytes
-    onSendProgress?(sendProgress)
-  }
-
-  private func drainOutbox() {
-    guard !isTerminating, !outbox.isEmpty else { return }
-
-    while let frame = outbox.first {
-      if manager.updateValue(frame, for: payloadChar, onSubscribedCentrals: nil) {
-        outbox.removeFirst()
-        sentBytes += frame.count - Chunker.headerSize
-      } else {
-        break
-      }
-    }
-
     onSendProgress?(sendProgress)
   }
 
@@ -264,7 +251,12 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
     
     if centralSubscribedCharacteristics.isEmpty {
       subscribedCentral = nil
-      flushTerminate()
+      
+      if let terminationCompletion {
+        terminationCompletion()
+        self.terminationCompletion = nil
+      }
+        
       onError?(.disconnected)
     }
   }
@@ -291,12 +283,16 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         }
 
         peripheral.respond(to: request, withResult: .success)
-
-        peripheral.updateValue(
-          localToken,
-          for: handshakeChar,
-          onSubscribedCentrals: nil
-        )
+        
+        workQueue.add { [weak self] in
+          guard let self else { return true }
+          
+          return peripheral.updateValue(
+            localToken,
+            for: self.handshakeChar,
+            onSubscribedCentrals: nil
+          )
+        }
 
         do {
           try ranger.startRanging(peerToken: peerToken)
@@ -314,11 +310,15 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         guard let full
         else { continue }
 
-        peripheral.updateValue(
-          Data([GATT.Control.done.rawValue]),
-          for: controlChar,
-          onSubscribedCentrals: nil
-        )
+        workQueue.add { [weak self] in
+          guard let self else { return true }
+          
+          return peripheral.updateValue(
+            Data([GATT.Control.done.rawValue]),
+            for: self.controlChar,
+            onSubscribedCentrals: nil
+          )
+        }
         
         onPayloadReceived?(full)
 
@@ -353,12 +353,38 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
   func peripheralManagerIsReady(
     toUpdateSubscribers _: CBMPeripheralManager
   ) {
-    if let pendingTerminate {
-      guard sendTerminateFrame(pendingTerminate) else { return }
-      flushTerminate()
-      return
-    }
+    workQueue.resume()
+  }
+}
 
-    drainOutbox()
+@BLEActor
+class BLEUnlimitedWorkQueue {
+  typealias WorkItem = () -> Bool
+  
+  private var stack: [WorkItem] = []
+  
+  init() {}
+  
+  func clear() {
+    stack = []
+  }
+  
+  func add(value: @escaping WorkItem) {
+    stack.append(value)
+    
+    if stack.count == 1 {
+      resume()
+    }
+  }
+  
+  func resume() {
+    while !stack.isEmpty {
+      guard let workItem = stack.popLast() else { return }
+      
+      if !workItem() {
+        stack.append(workItem)
+        return
+      }
+    }
   }
 }
