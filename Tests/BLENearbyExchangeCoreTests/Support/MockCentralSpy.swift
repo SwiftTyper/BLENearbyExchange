@@ -35,7 +35,7 @@ extension MockCentralSpy: @BLEActor CBMCentralSpecDelegate {
   func central(
     _: CBMCentralSpec,
     didReceiveUpdate value: Data,
-    for characteristic: CBMMutableCharacteristic
+    for characteristic: CBMMutableCharacteristic,
   ) {
     switch characteristic.uuid {
     case GATT.payload.cbuuid:

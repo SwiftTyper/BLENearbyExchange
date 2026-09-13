@@ -77,9 +77,9 @@ struct NearbyExchangeSheet: View {
   private var isSearching: Bool {
     switch presenter.phase {
     case .searching, .exchanging:
-      return true
+      true
     default:
-      return false
+      false
     }
   }
 

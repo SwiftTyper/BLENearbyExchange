@@ -10,7 +10,7 @@ struct Reassembler {
   var progress: TransferProgress {
     TransferProgress(
       bytes: receivedBytes,
-      total: total.map { Int($0) * chunkSize } ?? 0
+      total: total.map { Int($0) * chunkSize } ?? 0,
     )
   }
 

@@ -13,8 +13,8 @@ public class TimeoutController {
     source.schedule(deadline: .now() + timeout, leeway: .milliseconds(10))
     source.setEventHandler { [weak self] in
       guard let self else { return }
-      self.timer = nil
-      self.timeoutDidFire()
+      timer = nil
+      timeoutDidFire()
     }
 
     timer = source

@@ -11,7 +11,7 @@ public actor BLEActor {
 
   /// based on https://github.com/swiftlang/swift/blob/53280d730e9946c98f349727eed9865482ab8c71/stdlib/public/Concurrency/MainActor.swift#L128
   static func assumeIsolated<T: Sendable>(
-    _ operation: @BLEActor () throws -> T
+    _ operation: @BLEActor () throws -> T,
   ) rethrows -> T {
     typealias YesActor = @BLEActor () throws -> T
     typealias NoActor = () throws -> T

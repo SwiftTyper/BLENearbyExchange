@@ -31,7 +31,7 @@ final class NearbyExchangePresenter {
 
   func run(payload: Data) async throws -> Data {
     let newSession = await ExchangeSession(configuration: configuration)
-    let session = self.session ?? newSession
+    let session = session ?? newSession
 
     guard continuation == nil, await !session.isRunning
     else { throw NearbyExchangeAction.Failure.busy }

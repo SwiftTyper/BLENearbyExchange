@@ -241,7 +241,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     peer.spec.simulateWriteRequest(
       Data([GATT.Control.failed.rawValue]),
       for: controlCharacteristic,
-      withResponse: true
+      withResponse: true,
     ) { result in
       switch result {
       case .success:
@@ -270,7 +270,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     peer.spec.simulateWriteRequest(
       peerTokenData,
       for: handshakeChar,
-      withResponse: true
+      withResponse: true,
     ) { result in
       switch result {
       case .success:
@@ -301,7 +301,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
 extension BLEPeripheralManagerTests {
   private func makeSUT(
-    ranger: ProximityRanger = MockRanger()
+    ranger: ProximityRanger = MockRanger(),
   ) async -> BLEPeripheralManager {
     CBMCentralManagerMock.tearDownSimulation()
     CBMCentralManagerMock.simulateInitialState(.poweredOn)
@@ -309,7 +309,7 @@ extension BLEPeripheralManagerTests {
     let peripheral = BLEPeripheralManager(
       configuration: .init(),
       ranger: ranger,
-      forceMock: true
+      forceMock: true,
     )
 
     let poweredOn = expectation(description: "the manager powered on")
@@ -327,7 +327,7 @@ extension BLEPeripheralManagerTests {
   @discardableResult
   private func connect(
     _ peer: MockCentralSpy,
-    to peripheral: BLEPeripheralManager
+    to peripheral: BLEPeripheralManager,
   ) async throws -> [CBMMutableCharacteristic] {
     try await peripheral.startAdvertising(nonce: 1)
 
@@ -341,7 +341,7 @@ extension BLEPeripheralManagerTests {
 
     let characteristics = peer.spec.simulateCharacteristicDiscovery(
       [GATT.payload.cbuuid, GATT.control.cbuuid, GATT.handshake.cbuuid],
-      forService: NearbyExchange.Configuration.defaultServiceUUID.cbuuid
+      forService: NearbyExchange.Configuration.defaultServiceUUID.cbuuid,
     )
 
     peer.subscribe(to: characteristics)
@@ -356,7 +356,7 @@ private extension [CBMMutableCharacteristic] {
   func find(
     by uuid: CBUUID,
     file: StaticString = #filePath,
-    line: UInt = #line
+    line: UInt = #line,
   ) throws -> CBMMutableCharacteristic {
     guard let characteristic = self.first(where: { $0.uuid == uuid })
     else {

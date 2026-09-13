@@ -97,7 +97,7 @@ extension ExchangeSessionTests {
     private let storage = Mutex<[Step]>([])
 
     func withLock<R>(
-      _ body: (inout sending [Step]) throws -> sending R
+      _ body: (inout sending [Step]) throws -> sending R,
     ) rethrows -> sending R {
       try storage.withLock(body)
     }
@@ -107,7 +107,7 @@ extension ExchangeSessionTests {
     nonces: [UInt64],
     peer: MockPeripheralSpy,
     log: Log,
-    ranger: MockRanger = MockRanger()
+    ranger: MockRanger = MockRanger(),
   ) -> ExchangeSession {
     CBMCentralManagerMock.tearDownSimulation()
     CBMCentralManagerMock.simulateRSSIDeviation(.none)
@@ -127,9 +127,9 @@ extension ExchangeSessionTests {
           }
           log.withLock { $0.append(.nonce(nonce)) }
           return nonce
-        }
+        },
       ),
-      forceMock: true
+      forceMock: true,
     )
   }
 }

@@ -10,7 +10,7 @@ public enum NearbyExchange {
     public init(
       serviceUUID: UUID = Configuration.defaultServiceUUID,
       distanceThreshold: Float = 0.15,
-      timeout: TimeInterval = 60
+      timeout: TimeInterval = 60,
     ) {
       self.serviceUUID = serviceUUID
       self.distanceThreshold = distanceThreshold
@@ -18,7 +18,7 @@ public enum NearbyExchange {
     }
 
     public static let defaultServiceUUID = UUID(
-      uuidString: "B1E0E4CE-1234-4E45-8A52-4259455843AB"
+      uuidString: "B1E0E4CE-1234-4E45-8A52-4259455843AB",
     )!
   }
 }

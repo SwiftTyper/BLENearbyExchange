@@ -8,7 +8,7 @@ final class MockRanger: ProximityRanger {
   var onStartRanging: ((Data) -> Void)?
 
   init(
-    localToken: Data? = Data("local-token".utf8)
+    localToken: Data? = Data("local-token".utf8),
   ) {
     self.localToken = localToken
   }

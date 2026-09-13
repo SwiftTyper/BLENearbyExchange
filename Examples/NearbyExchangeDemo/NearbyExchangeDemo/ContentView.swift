@@ -19,7 +19,7 @@ struct ContentView: View {
           } label: {
             LabeledContent(
               file.name,
-              value: file.data.count.formatted(.byteCount(style: .file))
+              value: file.data.count.formatted(.byteCount(style: .file)),
             )
           }
         }
@@ -31,7 +31,7 @@ struct ContentView: View {
             } label: {
               LabeledContent(
                 received.name,
-                value: received.data.count.formatted(.byteCount(style: .file))
+                value: received.data.count.formatted(.byteCount(style: .file)),
               )
             }
           }
@@ -95,6 +95,6 @@ extension ContentView {
 
   private static let dummy = FilePayload(
     name: "dummy\(Int.random(in: 0 ..< 10)).txt",
-    data: Data(String(repeating: "Dummy Payload Data :)", count: 5000).utf8)
+    data: Data(String(repeating: "Dummy Payload Data :)", count: 5000).utf8),
   )
 }

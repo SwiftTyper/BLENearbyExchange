@@ -3,7 +3,7 @@ import SwiftUI
 
 public extension View {
   func nearbyExchangeHost(
-    configuration: NearbyExchange.Configuration = .init()
+    configuration: NearbyExchange.Configuration = .init(),
   ) -> some View {
     modifier(NearbyExchangeHostModifier(configuration: configuration))
   }
@@ -14,7 +14,7 @@ private struct NearbyExchangeHostModifier: ViewModifier {
 
   init(configuration: NearbyExchange.Configuration) {
     _presenter = State(
-      wrappedValue: NearbyExchangePresenter(configuration: configuration)
+      wrappedValue: NearbyExchangePresenter(configuration: configuration),
     )
   }
 

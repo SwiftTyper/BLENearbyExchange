@@ -35,7 +35,7 @@ final class BLECentralManager: NSObject {
   init(
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
-    forceMock: Bool = false
+    forceMock: Bool = false,
   ) {
     self.configuration = configuration
     self.ranger = ranger
@@ -45,7 +45,7 @@ final class BLECentralManager: NSObject {
     manager = CBMCentralManagerFactory.instance(
       delegate: self,
       queue: BLEActor.queue,
-      forceMock: forceMock
+      forceMock: forceMock,
     )
   }
 
@@ -54,13 +54,13 @@ final class BLECentralManager: NSObject {
 
     manager.scanForPeripherals(
       withServices: [configuration.serviceUUID.cbuuid],
-      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true] // TODO
+      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true], // TODO:
     )
   }
 
   func sendTerminate(
     _ control: GATT.Control,
-    completion: @escaping () -> Void
+    completion: @escaping () -> Void,
   ) {
     guard let peripheral, let controlChar
     else { return completion() }
@@ -78,10 +78,10 @@ final class BLECentralManager: NSObject {
       peripheral.writeValue(
         Data([control.rawValue]),
         for: controlChar,
-        type: .withResponse
+        type: .withResponse,
       )
 
-      if self.terminationCompletion != nil {
+      if terminationCompletion != nil {
         completion()
       }
 
@@ -164,7 +164,7 @@ final class BLECentralManager: NSObject {
 
 extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
   func centralManagerDidUpdateState(
-    _ central: CBMCentralManager
+    _ central: CBMCentralManager,
   ) {
     onStateChange?(central.state)
   }
@@ -173,7 +173,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     _ central: CBMCentralManager,
     didDiscover peripheral: CBMPeripheral,
     advertisementData: [String: Any],
-    rssi _: NSNumber
+    rssi _: NSNumber,
   ) {
     guard
       let peerNonceString = advertisementData[CBAdvertisementDataLocalNameKey] as? String,
@@ -184,7 +184,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 
     let role = RoleResolver.resolve(
       myNonce: nonce,
-      peerNonce: peerNonce
+      peerNonce: peerNonce,
     )
 
     manager.stopScan()
@@ -200,7 +200,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 
   func centralManager(
     _: CBMCentralManager,
-    didConnect peripheral: CBMPeripheral
+    didConnect peripheral: CBMPeripheral,
   ) {
     peripheral.discoverServices([configuration.serviceUUID.cbuuid])
   }
@@ -208,7 +208,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
   func centralManager(
     _: CBMCentralManager,
     didFailToConnect _: CBMPeripheral,
-    error: Error?
+    error: Error?,
   ) {
     onError?(.connectionFailed(error?.localizedDescription ?? "The peer is unreachable."))
   }
@@ -216,7 +216,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
   func centralManager(
     _: CBMCentralManager,
     didDisconnectPeripheral _: CBMPeripheral,
-    error _: Error?
+    error _: Error?,
   ) {
     if let terminationCompletion {
       terminationCompletion()
@@ -231,7 +231,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     didDisconnectPeripheral _: CBMPeripheral,
     timestamp _: CFAbsoluteTime,
     isReconnecting: Bool,
-    error _: Error?
+    error _: Error?,
   ) {
     guard !isReconnecting else { return }
 
@@ -247,7 +247,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   func peripheral(
     _ peripheral: CBMPeripheral,
-    didDiscoverServices error: (any Error)?
+    didDiscoverServices error: (any Error)?,
   ) {
     if let error {
       onError?(.discoveryFailed(error.localizedDescription))
@@ -263,14 +263,14 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     peripheral.discoverCharacteristics(
       [GATT.handshake.cbuuid, GATT.payload.cbuuid, GATT.control.cbuuid],
-      for: service
+      for: service,
     )
   }
 
   func peripheral(
     _ peripheral: CBMPeripheral,
     didDiscoverCharacteristicsFor service: CBMService,
-    error: (any Error)?
+    error: (any Error)?,
   ) {
     if let error {
       onError?(.discoveryFailed(error.localizedDescription))
@@ -311,7 +311,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
   func peripheral(
     _: CBMPeripheral,
-    didModifyServices invalidatedServices: [CBMService]
+    didModifyServices invalidatedServices: [CBMService],
   ) {
     guard
       invalidatedServices.contains(where: { $0.uuid == configuration.serviceUUID.cbuuid })
@@ -323,7 +323,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   func peripheral(
     _: CBMPeripheral,
     didUpdateNotificationStateFor _: CBMCharacteristic,
-    error: (any Error)?
+    error: (any Error)?,
   ) {
     if let error {
       onError?(.handshakeFailed(error.localizedDescription))
@@ -349,10 +349,10 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         peripheral?.canSendWriteWithoutResponse == true
       else { return false }
 
-      self.peripheral?.writeValue(
+      peripheral?.writeValue(
         token,
         for: handshakeChar,
-        type: .withResponse
+        type: .withResponse,
       )
 
       return true
@@ -364,7 +364,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   func peripheral(
     _ peripheral: CBMPeripheral,
     didUpdateValueFor characteristic: CBMCharacteristic,
-    error: (any Error)?
+    error: (any Error)?,
   ) {
     if let error {
       onError?(.transferFailed(error.localizedDescription))
@@ -398,7 +398,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         peripheral.writeValue(
           Data([GATT.Control.done.rawValue]),
           for: controlChar,
-          type: .withResponse
+          type: .withResponse,
         )
 
         return true

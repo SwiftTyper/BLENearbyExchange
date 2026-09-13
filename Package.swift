@@ -13,7 +13,7 @@ let package = Package(
   dependencies: [
     .package(
       url: "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
-      branch: "feature/peripheral-manager-support"
+      branch: "feature/peripheral-manager-support",
     ),
   ],
   targets: [
@@ -24,7 +24,7 @@ let package = Package(
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
-      ]
+      ],
     ),
     .target(
       name: "BLENearbyExchangeCore",
@@ -33,7 +33,7 @@ let package = Package(
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
-      ]
+      ],
     ),
     .testTarget(
       name: "BLENearbyExchangeCoreTests",
@@ -42,7 +42,7 @@ let package = Package(
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
-      ]
+      ],
     ),
-  ]
+  ],
 )

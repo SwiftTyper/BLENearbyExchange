@@ -224,7 +224,7 @@ extension BLECentralManagerTests {
 
     await fulfillment(
       of: [payloadReceived, receiveCompleted, receiptConfirmed],
-      timeout: 2
+      timeout: 2,
     )
   }
 
@@ -347,7 +347,7 @@ extension BLECentralManagerTests {
 extension BLECentralManagerTests {
   private func makeSUT(
     peer: MockPeripheralSpy,
-    ranger: MockRanger = MockRanger()
+    ranger: MockRanger = MockRanger(),
   ) async -> BLECentralManager {
     CBMCentralManagerMock.tearDownSimulation()
     CBMCentralManagerMock.simulateRSSIDeviation(.none)
@@ -357,7 +357,7 @@ extension BLECentralManagerTests {
     let central = BLECentralManager(
       configuration: .init(),
       ranger: ranger,
-      forceMock: true
+      forceMock: true,
     )
 
     let poweredOn = expectation(description: "the manager powered on")
@@ -376,7 +376,7 @@ extension BLECentralManagerTests {
     _ central: BLECentralManager,
     nonce: UInt64,
     file: StaticString = #filePath,
-    line: UInt = #line
+    line: UInt = #line,
   ) async {
     let connected = expectation(description: "the peer connected")
 
@@ -388,7 +388,7 @@ extension BLECentralManagerTests {
       XCTFail(
         "Unexpected error while connecting: \($0).",
         file: file,
-        line: line
+        line: line,
       )
     }
 

@@ -19,21 +19,21 @@ final class MockPeripheralSpy: @unchecked Sendable {
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
     nonce: UInt64,
-    mtu: Int = 64
+    mtu: Int = 64,
   ) {
     let name = RoleResolver.encode(nonce).base64EncodedString()
 
     self.init(
       configuration: configuration,
       advertisedName: name,
-      mtu: mtu
+      mtu: mtu,
     )
   }
 
   init(
     configuration: NearbyExchange.Configuration = .init(),
     advertisedName: String,
-    mtu: Int = 64
+    mtu: Int = 64,
   ) {
     self.mtu = mtu
 
@@ -51,7 +51,7 @@ final class MockPeripheralSpy: @unchecked Sendable {
           CBMAdvertisementDataLocalNameKey: advertisedName,
           CBMAdvertisementDataServiceUUIDsKey: [configuration.serviceUUID.cbuuid],
         ],
-        withInterval: 0.05
+        withInterval: 0.05,
       )
       .connectable(
         name: "peer",
@@ -59,12 +59,12 @@ final class MockPeripheralSpy: @unchecked Sendable {
           CBMServiceMock(
             type: configuration.serviceUUID.cbuuid,
             primary: true,
-            characteristics: characteristics
+            characteristics: characteristics,
           ),
         ],
         delegate: self,
         connectionInterval: 0.01,
-        mtu: mtu
+        mtu: mtu,
       )
       .build()
   }
@@ -115,7 +115,7 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
   func peripheral(
     _: CBMPeripheralSpec,
     didReceiveWriteRequestFor characteristic: CBMCharacteristicMock,
-    data: Data
+    data: Data,
   ) -> Result<Void, Error> {
     switch characteristic.uuid {
     case GATT.handshake.cbuuid:
@@ -142,7 +142,7 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
   func peripheral(
     _: CBMPeripheralSpec,
     didReceiveWriteCommandFor characteristic: CBMCharacteristicMock,
-    data: Data
+    data: Data,
   ) {
     guard characteristic.uuid == GATT.payload.cbuuid
     else { return }
@@ -158,7 +158,7 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
 
   func peripheral(
     _: CBMPeripheralSpec,
-    didDisconnect error: Error?
+    didDisconnect error: Error?,
   ) {
     onDisconnect?(error)
   }

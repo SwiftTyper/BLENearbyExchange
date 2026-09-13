@@ -32,7 +32,7 @@ public class ProximityRanger: NSObject {
 
       return try? NSKeyedArchiver.archivedData(
         withRootObject: token,
-        requiringSecureCoding: true
+        requiringSecureCoding: true,
       )
     #else
       return nil
@@ -44,7 +44,7 @@ public class ProximityRanger: NSObject {
       guard
         let token = try NSKeyedUnarchiver.unarchivedObject(
           ofClass: NIDiscoveryToken.self,
-          from: peerToken
+          from: peerToken,
         )
       else { throw Failure.unarchive }
 
@@ -71,7 +71,7 @@ public class ProximityRanger: NSObject {
   extension ProximityRanger: @BLEActor NISessionDelegate {
     func session(
       _: NISession,
-      didUpdate nearbyObjects: [NINearbyObject]
+      didUpdate nearbyObjects: [NINearbyObject],
     ) {
       guard let distance = nearbyObjects.first?.distance
       else { return }

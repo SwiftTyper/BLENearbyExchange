@@ -27,13 +27,13 @@ public final class ExchangeSession: TimeoutController {
   private var progress: Double = 0
 
   public convenience init(
-    configuration: NearbyExchange.Configuration
+    configuration: NearbyExchange.Configuration,
   ) {
     self.init(
       configuration: configuration,
       ranger: ProximityRanger(),
       roleResolver: RoleResolver(),
-      forceMock: false
+      forceMock: false,
     )
   }
 
@@ -41,7 +41,7 @@ public final class ExchangeSession: TimeoutController {
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
     roleResolver: RoleResolver,
-    forceMock: Bool
+    forceMock: Bool,
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
@@ -53,13 +53,13 @@ public final class ExchangeSession: TimeoutController {
     peripheral = .init(
       configuration: configuration,
       ranger: ranger,
-      forceMock: forceMock
+      forceMock: forceMock,
     )
 
     central = .init(
       configuration: configuration,
       ranger: ranger,
-      forceMock: forceMock
+      forceMock: forceMock,
     )
 
     peripheral?.onStateChange = { [weak self] in
@@ -141,7 +141,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   private func waitForPoweredOn(
-    _ state: AsyncCurrentValue<CBMManagerState>
+    _ state: AsyncCurrentValue<CBMManagerState>,
   ) async throws {
     for await value in state.receive() {
       switch value {

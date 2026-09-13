@@ -5,7 +5,7 @@ import Foundation
 /// they can never disagree without exchanging a single extra message.
 struct RoleResolver {
   init(
-    makeNonce: @escaping () -> UInt64 = { RoleResolver.makeNonce() }
+    makeNonce: @escaping () -> UInt64 = { RoleResolver.makeNonce() },
   ) {
     self.makeNonce = makeNonce
   }
