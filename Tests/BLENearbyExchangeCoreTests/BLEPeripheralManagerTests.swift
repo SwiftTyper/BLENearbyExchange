@@ -260,15 +260,64 @@ final class BLEPeripheralManagerTests: XCTestCase {
     XCTAssertTrue(peer.updates.contains(.control(.done)))
   }
 
-  func test_centralDisconnection_propagatesError() async {
+  func test_centralDisconnection_propagatesError() async throws {
+    let peripheral = await makeSUT()
+    let peer = MockCentralSpy()
+    
+    try await connect(peer, to: peripheral)
+    
+    let errorExpectation = expectation(description: "error")
+    
+    peripheral.onError = { error in
+      errorExpectation.fulfill()
+      XCTAssertEqual(error, .disconnected)
+    }
+    
+    peer.spec.simulateDisconnection()
+    
+    await fulfillment(of: [errorExpectation], timeout: 1.0)
+  }
+  
+  func test_centralSendsFailure_peripheralPropagesError() async throws {
+    let peripheral = await makeSUT()
+    let peer = MockCentralSpy()
+    
+    let characterisitcs = try await connect(peer, to: peripheral)
+    
+    guard let controlCharacteristic = characterisitcs
+      .first(where: { $0.uuid == GATT.control.cbuuid })
+    else {
+      XCTFail("missing control charactersitic")
+      return
+    }
+    
+    let errorExpectation = expectation(description: "error")
+    
+    peripheral.onError = { error in
+      errorExpectation.fulfill()
+      XCTAssertEqual(error, .failedOnPeer)
+    }
 
+    let failCommendSent = expectation(description: "sent failure")
+    
+    peer.spec.simulateWriteRequest(
+      Data([GATT.Control.failed.rawValue]),
+      for: controlCharacteristic,
+      withResponse: true
+    ) { result in
+      switch result {
+        case .success:
+          failCommendSent.fulfill()
+
+        case let .failure(error):
+          XCTFail("\(error.localizedDescription)")
+      }
+    }
+    
+    await fulfillment(of: [failCommendSent, errorExpectation], timeout: 1.0)
   }
 
   func test_periphalReceivesPeersToken_startsRanging() async {
-
-  }
-
-  func test_peripheralOnSubscription_callsConnectionCallbacks() async {
 
   }
 }
