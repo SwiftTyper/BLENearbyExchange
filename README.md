@@ -1,3 +1,5 @@
+[![CI](https://github.com/SwiftTyper/BLENearbyExchange/actions/workflows/CI.yml/badge.svg)](https://github.com/SwiftTyper/BLENearbyExchange/actions/workflows/CI.yml)
+
 # BLENearbyExchange
 
 a simple proximity based BLE exchange where each device sends and receives a data payload (originally inspired by Apple's tap to exchange contact info functionality)
@@ -35,3 +37,4 @@ WindowGroup {
 - [ ] Mock BLE for units
 - [ ] Handle 3+ potential devices in proximity
 - [ ] Add L2CAP support
+- [ ] Improve the UX/UI
