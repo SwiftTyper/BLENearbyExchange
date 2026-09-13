@@ -20,6 +20,7 @@ final class MockCentralSpy: @unchecked Sendable {
 
   var onControl: ((GATT.Control) -> Void)?
   var onPayload: ((Data) -> Void)?
+  var onHandshake: ((Data) -> Void)?
   var updates: [Update] { state.withLock { $0 } }
 
   func subscribe(to characteristics: [CBMMutableCharacteristic]) {
@@ -39,18 +40,21 @@ extension MockCentralSpy: CBMCentralSpecDelegate {
     case GATT.payload.cbuuid:
       state.withLock { $0.append(.payload(value)) }
       onPayload?(value)
-
+      
     case GATT.control.cbuuid:
       guard
         let raw = value.first,
         let control = GATT.Control(rawValue: raw)
       else { return }
-
+      
       state.withLock { $0.append(.control(control)) }
       onControl?(control)
-
+      
+    case GATT.handshake.cbuuid:
+      onHandshake?(value)
+      
     default:
-      return
+      break
     }
   }
 }
@@ -317,19 +321,66 @@ final class BLEPeripheralManagerTests: XCTestCase {
     await fulfillment(of: [failCommendSent, errorExpectation], timeout: 1.0)
   }
 
-  func test_periphalReceivesPeersToken_startsRanging() async {
-
+  func test_periphalReceivesPeersToken_startsRangingAndSendsItsTokenToCentral() async throws {
+    let peripheralTokenData = Data("peripheral-token".utf8)
+    let mockRanger = MockRanger(localToken: peripheralTokenData)
+    let peripheral = await makeSUT(ranger: mockRanger)
+    let peer = MockCentralSpy()
+    
+    let characterisitcs = try await connect(peer, to: peripheral)
+    
+    guard let handshakeChar = characterisitcs
+      .first(where: { $0.uuid == GATT.handshake.cbuuid })
+    else {
+      XCTFail("missing control charactersitic")
+      return
+    }
+    
+    let peerTokenSent = expectation(description: "peer token sent")
+    let peerTokenData = Data("peer-token".utf8)
+    
+    peer.spec.simulateWriteRequest(
+      peerTokenData,
+      for: handshakeChar,
+      withResponse: true
+    ) { result in
+      switch result {
+        case .success:
+          peerTokenSent.fulfill()
+        
+        case let .failure(error):
+          XCTFail("\(error.localizedDescription)")
+      }
+    }
+    
+    let centralReceivedToken = expectation(description: "central received token")
+    
+    peer.onHandshake = { receivedPeripheralTokenData in
+      centralReceivedToken.fulfill()
+      XCTAssertEqual(peripheralTokenData, receivedPeripheralTokenData)
+    }
+    
+    let peerTokenReceived = expectation(description: "peer token received")
+    
+    mockRanger.onStartRanging = { receivedTokenData in
+      peerTokenReceived.fulfill()
+      XCTAssertEqual(receivedTokenData, peerTokenData)
+    }
+    
+    await fulfillment(of: [peerTokenSent, centralReceivedToken, peerTokenReceived], timeout: 1.0)
   }
 }
 
 extension BLEPeripheralManagerTests {
-  private func makeSUT() async -> BLEPeripheralManager {
+  private func makeSUT(
+    ranger: ProximityRanger = MockRanger()
+  ) async -> BLEPeripheralManager {
     CBMCentralManagerMock.tearDownSimulation()
     CBMCentralManagerMock.simulateInitialState(.poweredOn)
 
     let peripheral = BLEPeripheralManager(
       configuration: .init(),
-      ranger: MockRanger(),
+      ranger: ranger,
       forceMock: true
     )
 
