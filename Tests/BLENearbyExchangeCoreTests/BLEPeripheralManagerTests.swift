@@ -2,62 +2,7 @@
 import CoreBluetooth
 import CoreBluetoothMock
 import Foundation
-import Synchronization
 import XCTest
-
-final class MockCentralSpy: @unchecked Sendable {
-  private(set) var spec: CBMCentralSpec!
-  private let state = Mutex<[Update]>([])
-
-  enum Update: Equatable {
-    case payload(Data)
-    case control(GATT.Control)
-  }
-
-  init() {
-    self.spec = CBMCentralSpec(delegate: self)
-  }
-
-  var onControl: ((GATT.Control) -> Void)?
-  var onPayload: ((Data) -> Void)?
-  var onHandshake: ((Data) -> Void)?
-  var updates: [Update] { state.withLock { $0 } }
-
-  func subscribe(to characteristics: [CBMMutableCharacteristic]) {
-    for characteristic in characteristics {
-      spec.simulateSubscription(to: characteristic)
-    }
-  }
-}
-
-extension MockCentralSpy: CBMCentralSpecDelegate {
-  func central(
-    _: CBMCentralSpec,
-    didReceiveUpdate value: Data,
-    for characteristic: CBMMutableCharacteristic
-  ) {
-    switch characteristic.uuid {
-    case GATT.payload.cbuuid:
-      state.withLock { $0.append(.payload(value)) }
-      onPayload?(value)
-      
-    case GATT.control.cbuuid:
-      guard
-        let raw = value.first,
-        let control = GATT.Control(rawValue: raw)
-      else { return }
-      
-      state.withLock { $0.append(.control(control)) }
-      onControl?(control)
-      
-    case GATT.handshake.cbuuid:
-      onHandshake?(value)
-      
-    default:
-      break
-    }
-  }
-}
 
 @BLEActor
 final class BLEPeripheralManagerTests: XCTestCase {
@@ -132,12 +77,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
     
     let characterisitcs = try await connect(peer, to: peripheral)
-    
-    guard let payloadChar = characterisitcs.first(where: { $0.uuid == GATT.payload.cbuuid })
-    else {
-      XCTFail("missing payload characterisitc")
-      return
-    }
+    let payloadChar = try characterisitcs.find(by: GATT.payload.cbuuid)
     
     let payload = Data(repeating: 0x00, count: 4000)
     let chunks = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength)
@@ -169,18 +109,13 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
     
     let characterisitcs = try await connect(peer, to: peripheral)
-    
-    guard let control = characterisitcs.first(where: { $0.uuid == GATT.control.cbuuid })
-    else {
-      XCTFail("missing control characteristic")
-      return
-    }
+    let controlChar = try characterisitcs.find(by: GATT.control.cbuuid)
     
     let doneCommendSent = expectation(description: "done command sent")
     
     let doneCommend = Data([GATT.Control.done.rawValue])
     
-    peer.spec.simulateWriteRequest(doneCommend, for: control, withResponse: true) { result in
+    peer.spec.simulateWriteRequest(doneCommend, for: controlChar, withResponse: true) { result in
       switch result {
       case .success:
         doneCommendSent.fulfill()
@@ -204,13 +139,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
-
-    guard let payloadChar = characterisitcs.first(where: { $0.uuid == GATT.payload.cbuuid })
-    else {
-      XCTFail("missing payload characterisitc")
-      return
-    }
-
+    let payloadChar = try characterisitcs.find(by: GATT.payload.cbuuid)
+    
     let outgoingPayload = Data(repeating: 0x00, count: 4000)
     let outgoingFrameCount = Chunker.chunk(outgoingPayload, mtu: peer.spec.maximumUpdateValueLength).count
 
@@ -287,13 +217,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
     
     let characterisitcs = try await connect(peer, to: peripheral)
-    
-    guard let controlCharacteristic = characterisitcs
-      .first(where: { $0.uuid == GATT.control.cbuuid })
-    else {
-      XCTFail("missing control charactersitic")
-      return
-    }
+    let controlCharacteristic = try characterisitcs.find(by: GATT.control.cbuuid)
     
     let errorExpectation = expectation(description: "error")
     
@@ -328,13 +252,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
     
     let characterisitcs = try await connect(peer, to: peripheral)
-    
-    guard let handshakeChar = characterisitcs
-      .first(where: { $0.uuid == GATT.handshake.cbuuid })
-    else {
-      XCTFail("missing control charactersitic")
-      return
-    }
+    let handshakeChar = try characterisitcs.find(by: GATT.handshake.cbuuid)
     
     let peerTokenSent = expectation(description: "peer token sent")
     let peerTokenData = Data("peer-token".utf8)
@@ -422,4 +340,22 @@ extension BLEPeripheralManagerTests {
     
     return characteristics
   }
+}
+
+extension [CBMMutableCharacteristic] {
+  fileprivate func find(
+    by uuid: CBUUID,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) throws -> CBMMutableCharacteristic {
+    guard let characteristic = self.first(where: { $0.uuid == uuid })
+    else {
+      XCTFail("missing charactersitic", file: file, line: line)
+      throw MissingCharacteristic()
+    }
+    
+    return characteristic
+  }
+  
+  fileprivate struct MissingCharacteristic: Error {}
 }
