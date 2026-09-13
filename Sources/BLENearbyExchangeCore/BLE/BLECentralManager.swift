@@ -16,7 +16,7 @@ final class BLECentralManager: NSObject {
   private var peripheral: CBMPeripheral?
 
   var payload = Data()
-  
+
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
   var onRoleReceived: ((_ role: ConnectionRole?) -> Void)?
@@ -54,7 +54,7 @@ final class BLECentralManager: NSObject {
 
     manager.scanForPeripherals(
       withServices: [configuration.serviceUUID.cbuuid],
-      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true] /// TODO
+      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true] // TODO
     )
   }
 
@@ -66,23 +66,25 @@ final class BLECentralManager: NSObject {
     else { return completion() }
 
     terminationCompletion = completion
-    
+
     transferQueue.clear()
-    
+
     transferQueue.add { [weak self] in
       guard
         let self,
         peripheral.canSendWriteWithoutResponse
       else { return false }
-      
+
       peripheral.writeValue(
         Data([control.rawValue]),
         for: controlChar,
         type: .withResponse
       )
-      
-      if self.terminationCompletion != nil { completion() }
-      
+
+      if self.terminationCompletion != nil {
+        completion()
+      }
+
       return true
     }
   }
@@ -103,7 +105,7 @@ final class BLECentralManager: NSObject {
     payloadChar = nil
     controlChar = nil
     nonce = nil
-    
+
     transferQueue.clear()
     terminationCompletion = nil
 
@@ -126,25 +128,25 @@ final class BLECentralManager: NSObject {
       let peripheral,
       let payloadChar
     else { return }
-    
+
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
-    
+
     sentBytes = 0
     payloadBytes = payload.count
-    
+
     for chunk in Chunker.chunk(payload, mtu: mtu) {
       transferQueue.add { [weak self] in
         guard
           let self,
           peripheral.canSendWriteWithoutResponse
         else { return false }
-        
+
         peripheral.writeValue(chunk, for: payloadChar, type: .withoutResponse)
-        
+
         sentBytes += chunk.count - Chunker.headerSize
-        
+
         onSendProgress?(sendProgress)
-        
+
         return true
       }
     }
@@ -220,7 +222,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
       terminationCompletion()
       self.terminationCompletion = nil
     }
-    
+
     onError?(.disconnected)
   }
 
@@ -232,7 +234,7 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     error _: Error?
   ) {
     guard !isReconnecting else { return }
-    
+
     if let terminationCompletion {
       terminationCompletion()
       self.terminationCompletion = nil
@@ -346,13 +348,13 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         let self,
         peripheral?.canSendWriteWithoutResponse == true
       else { return false }
-      
+
       self.peripheral?.writeValue(
         token,
         for: handshakeChar,
         type: .withResponse
       )
-      
+
       return true
     }
 
@@ -388,17 +390,17 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       else { return }
 
       onPayloadReceived?(full)
-      
+
       transferQueue.add {
         guard peripheral.canSendWriteWithoutResponse
         else { return false }
-        
+
         peripheral.writeValue(
           Data([GATT.Control.done.rawValue]),
           for: controlChar,
           type: .withResponse
         )
-        
+
         return true
       }
 

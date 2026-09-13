@@ -1,7 +1,7 @@
 import Foundation
 
-extension ExchangeSession {
-  public enum Event: Sendable {
+public extension ExchangeSession {
+  enum Event: Sendable {
     case connected
     case distance(Float)
     case progress(Double)

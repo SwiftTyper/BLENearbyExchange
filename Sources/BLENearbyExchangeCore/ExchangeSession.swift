@@ -25,7 +25,7 @@ public final class ExchangeSession: TimeoutController {
   private var sent = TransferProgress()
   private var received = TransferProgress()
   private var progress: Double = 0
-  
+
   public convenience init(
     configuration: NearbyExchange.Configuration
   ) {
@@ -45,29 +45,29 @@ public final class ExchangeSession: TimeoutController {
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
-    
+
     super.init()
 
     self.ranger = ranger
 
-    self.peripheral = .init(
+    peripheral = .init(
       configuration: configuration,
       ranger: ranger,
       forceMock: forceMock
     )
-    
-    self.central = .init(
+
+    central = .init(
       configuration: configuration,
       ranger: ranger,
       forceMock: forceMock
     )
-    
-    self.peripheral?.onStateChange = { [weak self] in
+
+    peripheral?.onStateChange = { [weak self] in
       guard let mapped = CBMManagerState(rawValue: $0.rawValue) else { return }
       self?.peripheralState.send(mapped)
     }
-    
-    self.central?.onStateChange = { [weak self] in
+
+    central?.onStateChange = { [weak self] in
       self?.centralState.send($0)
     }
   }
@@ -91,7 +91,7 @@ public final class ExchangeSession: TimeoutController {
     peripheral?.payload = payload
     central?.payload = payload
     wireCallbacks()
-    let nonce = self.roleResolver.makeNonce()
+    let nonce = roleResolver.makeNonce()
     try await peripheral?.startAdvertising(nonce: nonce)
     central?.startScanning(nonce: nonce)
 
@@ -108,7 +108,7 @@ public final class ExchangeSession: TimeoutController {
     try await beginHandshake()
   }
 
-  public override func timeoutDidFire() {
+  override public func timeoutDidFire() {
     fail(.timedOut)
   }
 

@@ -17,7 +17,7 @@ struct RoleResolverTests {
 
   @Test func bothSidesAgreeOnOppositeRoles() {
     let resolver = RoleResolver()
-    
+
     let a = resolver.makeNonce()
     var b = resolver.makeNonce()
     while a == b {

@@ -20,7 +20,7 @@ let package = Package(
     .target(
       name: "BLENearbyExchange",
       dependencies: [
-        "BLENearbyExchangeCore"
+        "BLENearbyExchangeCore",
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

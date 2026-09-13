@@ -33,114 +33,124 @@ final class BLEPeripheralManagerTests: XCTestCase {
     await fulfillment(of: [terminateSent, terminateReceived], timeout: 1.0)
 
     let payloadFrames = peer.updates.filter {
-      if case .payload = $0 { true } else { false }
+      if case .payload = $0 {
+        true
+      } else {
+        false
+      }
     }
-    
+
     XCTAssertLessThan(payloadFrames.count, frameCount)
     XCTAssertEqual(peer.updates.last, .control(.cancelled))
   }
-  
+
   func test_send_transfersFullPayloadToPeer() async throws {
     let peripheral = await makeSUT()
     let peer = MockCentralSpy()
-    
+
     try await connect(peer, to: peripheral)
-    
+
     let payload = Data(repeating: 0x00, count: 4000)
     let frameCount = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength).count
-    
+
     peripheral.send(payload: payload)
-    
+
     let fullyEnqueued = expectation(description: "the full payload was enqueued")
-    
+
     peripheral.onSendProgress = { progress in
       guard progress.bytes == payload.count else { return }
       fullyEnqueued.fulfill()
     }
-    
+
     let fullyReceivedPayload = expectation(description: "the full payload was received by the peer")
     fullyReceivedPayload.expectedFulfillmentCount = frameCount
-    
+
     peer.onPayload = { _ in
       fullyReceivedPayload.fulfill()
     }
-    
+
     await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 1.0)
-    
-    let peerReceivedFrameCount = peer.updates.filter({ if case .payload = $0 { true } else { false } }).count
-    
+
+    let peerReceivedFrameCount = peer.updates.filter {
+      if case .payload = $0 {
+        true
+      } else {
+        false
+      }
+    }.count
+
     XCTAssertEqual(frameCount, peerReceivedFrameCount)
   }
-  
+
   func test_centralSends_peripheralReceivesFullPayload() async throws {
     let peripheral = await makeSUT()
     let peer = MockCentralSpy()
-    
+
     let characterisitcs = try await connect(peer, to: peripheral)
     let payloadChar = try characterisitcs.find(by: GATT.payload.cbuuid)
-    
+
     let payload = Data(repeating: 0x00, count: 4000)
     let chunks = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength)
-    
+
     for chunk in chunks {
       peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
         switch result {
         case .success:
           break
-          
+
         case .failure:
           XCTFail("Failed to queue write request")
         }
       }
     }
-    
+
     let payloadReceived = expectation(description: "full payload received")
-    
+
     peripheral.onPayloadReceived = { receivedPayload in
       XCTAssertEqual(payload, receivedPayload)
       payloadReceived.fulfill()
     }
-    
+
     await fulfillment(of: [payloadReceived], timeout: 1.0)
   }
-  
+
   func test_centralSendsDone_peripheralReceivesConfirmation() async throws {
     let peripheral = await makeSUT()
     let peer = MockCentralSpy()
-    
+
     let characterisitcs = try await connect(peer, to: peripheral)
     let controlChar = try characterisitcs.find(by: GATT.control.cbuuid)
-    
+
     let doneCommendSent = expectation(description: "done command sent")
-    
+
     let doneCommend = Data([GATT.Control.done.rawValue])
-    
+
     peer.spec.simulateWriteRequest(doneCommend, for: controlChar, withResponse: true) { result in
       switch result {
       case .success:
         doneCommendSent.fulfill()
-        
-      case .failure(let failure):
+
+      case let .failure(failure):
         XCTFail("\(failure.localizedDescription)")
       }
     }
-    
+
     let receivedDoneCommend = expectation(description: "received done command")
-    
+
     peripheral.onPeerReceivedDataConfirmation = {
       receivedDoneCommend.fulfill()
     }
-    
+
     await fulfillment(of: [doneCommendSent, receivedDoneCommend], timeout: 1.0)
   }
-  
+
   func test_peripheralsPayloadOutgoingQueueFull_doesntDropOtherOutgoingCommands() async throws {
     let peripheral = await makeSUT()
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
     let payloadChar = try characterisitcs.find(by: GATT.payload.cbuuid)
-    
+
     let outgoingPayload = Data(repeating: 0x00, count: 4000)
     let outgoingFrameCount = Chunker.chunk(outgoingPayload, mtu: peer.spec.maximumUpdateValueLength).count
 
@@ -155,14 +165,14 @@ final class BLEPeripheralManagerTests: XCTestCase {
     peripheral.send(payload: outgoingPayload)
 
     await fulfillment(of: [transferStarted], timeout: 1.0)
-    
-    /// this is significatly smaller than the outgoing payload so
-    /// that it finished way earlier and we try to send done during the outgoing payload transfer
+
+    // this is significatly smaller than the outgoing payload so
+    // that it finished way earlier and we try to send done during the outgoing payload transfer
     let incomingPayload = Data(repeating: 0x01, count: 100)
 
     for chunk in Chunker.chunk(incomingPayload, mtu: peer.spec.maximumUpdateValueLength) {
       peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
-        if case .failure(let failure) = result {
+        if case let .failure(failure) = result {
           XCTFail("\(failure.localizedDescription)")
         }
       }
@@ -197,51 +207,51 @@ final class BLEPeripheralManagerTests: XCTestCase {
   func test_centralDisconnection_propagatesError() async throws {
     let peripheral = await makeSUT()
     let peer = MockCentralSpy()
-    
+
     try await connect(peer, to: peripheral)
-    
+
     let errorExpectation = expectation(description: "error")
-    
+
     peripheral.onError = { error in
       errorExpectation.fulfill()
       XCTAssertEqual(error, .disconnected)
     }
-    
+
     peer.spec.simulateDisconnection()
-    
+
     await fulfillment(of: [errorExpectation], timeout: 1.0)
   }
-  
+
   func test_centralSendsFailure_peripheralPropagesError() async throws {
     let peripheral = await makeSUT()
     let peer = MockCentralSpy()
-    
+
     let characterisitcs = try await connect(peer, to: peripheral)
     let controlCharacteristic = try characterisitcs.find(by: GATT.control.cbuuid)
-    
+
     let errorExpectation = expectation(description: "error")
-    
+
     peripheral.onError = { error in
       errorExpectation.fulfill()
       XCTAssertEqual(error, .failedOnPeer)
     }
 
     let failCommendSent = expectation(description: "sent failure")
-    
+
     peer.spec.simulateWriteRequest(
       Data([GATT.Control.failed.rawValue]),
       for: controlCharacteristic,
       withResponse: true
     ) { result in
       switch result {
-        case .success:
-          failCommendSent.fulfill()
+      case .success:
+        failCommendSent.fulfill()
 
-        case let .failure(error):
-          XCTFail("\(error.localizedDescription)")
+      case let .failure(error):
+        XCTFail("\(error.localizedDescription)")
       }
     }
-    
+
     await fulfillment(of: [failCommendSent, errorExpectation], timeout: 1.0)
   }
 
@@ -250,41 +260,41 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let mockRanger = MockRanger(localToken: peripheralTokenData)
     let peripheral = await makeSUT(ranger: mockRanger)
     let peer = MockCentralSpy()
-    
+
     let characterisitcs = try await connect(peer, to: peripheral)
     let handshakeChar = try characterisitcs.find(by: GATT.handshake.cbuuid)
-    
+
     let peerTokenSent = expectation(description: "peer token sent")
     let peerTokenData = Data("peer-token".utf8)
-    
+
     peer.spec.simulateWriteRequest(
       peerTokenData,
       for: handshakeChar,
       withResponse: true
     ) { result in
       switch result {
-        case .success:
-          peerTokenSent.fulfill()
-        
-        case let .failure(error):
-          XCTFail("\(error.localizedDescription)")
+      case .success:
+        peerTokenSent.fulfill()
+
+      case let .failure(error):
+        XCTFail("\(error.localizedDescription)")
       }
     }
-    
+
     let centralReceivedToken = expectation(description: "central received token")
-    
+
     peer.onHandshake = { receivedPeripheralTokenData in
       centralReceivedToken.fulfill()
       XCTAssertEqual(peripheralTokenData, receivedPeripheralTokenData)
     }
-    
+
     let peerTokenReceived = expectation(description: "peer token received")
-    
+
     mockRanger.onStartRanging = { receivedTokenData in
       peerTokenReceived.fulfill()
       XCTAssertEqual(receivedTokenData, peerTokenData)
     }
-    
+
     await fulfillment(of: [peerTokenSent, centralReceivedToken, peerTokenReceived], timeout: 1.0)
   }
 }
@@ -318,7 +328,7 @@ extension BLEPeripheralManagerTests {
   private func connect(
     _ peer: MockCentralSpy,
     to peripheral: BLEPeripheralManager
-  ) async throws -> [CBMMutableCharacteristic]{
+  ) async throws -> [CBMMutableCharacteristic] {
     try await peripheral.startAdvertising(nonce: 1)
 
     let subscribed = expectation(description: "the peer subscribed")
@@ -326,7 +336,7 @@ extension BLEPeripheralManagerTests {
 
     peripheral.onConnected = { subscribed.fulfill() }
     peripheral.onRoleConfirmed = { roleConfirmed.fulfill() }
-    
+
     peer.spec.simulateConnection()
 
     let characteristics = peer.spec.simulateCharacteristicDiscovery(
@@ -335,15 +345,15 @@ extension BLEPeripheralManagerTests {
     )
 
     peer.subscribe(to: characteristics)
-    
+
     await fulfillment(of: [subscribed, roleConfirmed], timeout: 0.2)
-    
+
     return characteristics
   }
 }
 
-extension [CBMMutableCharacteristic] {
-  fileprivate func find(
+private extension [CBMMutableCharacteristic] {
+  func find(
     by uuid: CBUUID,
     file: StaticString = #filePath,
     line: UInt = #line
@@ -353,9 +363,9 @@ extension [CBMMutableCharacteristic] {
       XCTFail("missing charactersitic", file: file, line: line)
       throw MissingCharacteristic()
     }
-    
+
     return characteristic
   }
-  
-  fileprivate struct MissingCharacteristic: Error {}
+
+  struct MissingCharacteristic: Error {}
 }

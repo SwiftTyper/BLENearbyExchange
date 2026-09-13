@@ -9,20 +9,20 @@ final class MockPeripheralSpy: @unchecked Sendable {
   private let mtu: Int
   private let characteristics: [CBMCharacteristicMock]
   private let state = Mutex<State>(.init())
-  
+
   struct State {
     var handshakeToken: Data?
     var controls: [GATT.Control] = []
     var reassembler = Reassembler()
   }
-  
+
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
     nonce: UInt64,
     mtu: Int = 64
   ) {
     let name = RoleResolver.encode(nonce).base64EncodedString()
-    
+
     self.init(
       configuration: configuration,
       advertisedName: name,
@@ -36,14 +36,14 @@ final class MockPeripheralSpy: @unchecked Sendable {
     mtu: Int = 64
   ) {
     self.mtu = mtu
-    
-    self.characteristics = [
+
+    characteristics = [
       CBMCharacteristicMock(type: GATT.handshake.cbuuid, properties: [.notify, .write]),
       CBMCharacteristicMock(type: GATT.payload.cbuuid, properties: [.writeWithoutResponse, .notify]),
-      CBMCharacteristicMock(type: GATT.control.cbuuid, properties: [.write, .notify])
+      CBMCharacteristicMock(type: GATT.control.cbuuid, properties: [.write, .notify]),
     ]
-    
-    self.spec = CBMPeripheralSpec
+
+    spec = CBMPeripheralSpec
       .simulatePeripheral(proximity: .immediate)
       .advertising(
         advertisementData: [
@@ -59,8 +59,8 @@ final class MockPeripheralSpy: @unchecked Sendable {
           CBMServiceMock(
             type: configuration.serviceUUID.cbuuid,
             primary: true,
-            characteristics: self.characteristics
-          )
+            characteristics: characteristics
+          ),
         ],
         delegate: self,
         connectionInterval: 0.01,
@@ -68,14 +68,22 @@ final class MockPeripheralSpy: @unchecked Sendable {
       )
       .build()
   }
-  
+
   var onPayload: ((Data) -> Void)?
   var onControl: ((GATT.Control) -> Void)?
   var onDisconnect: ((Error?) -> Void)?
 
-  var handshakeToken: Data? { state.withLock(\.handshakeToken) }
-  var controls: [GATT.Control] { state.withLock(\.controls) }
-  var isConnected: Bool { spec.isConnected }
+  var handshakeToken: Data? {
+    state.withLock(\.handshakeToken)
+  }
+
+  var controls: [GATT.Control] {
+    state.withLock(\.controls)
+  }
+
+  var isConnected: Bool {
+    spec.isConnected
+  }
 
   func notify(_ data: Data, on uuid: UUID) {
     guard let characteristic = characteristics.first(where: { $0.uuid.uuidString == uuid.uuidString })

@@ -29,8 +29,8 @@ private enum NearbyExchangeActionKey: EnvironmentKey {
   static let defaultValue = NearbyExchangeAction(presenter: nil)
 }
 
-extension EnvironmentValues {
-  public var nearbyExchange: NearbyExchangeAction {
+public extension EnvironmentValues {
+  var nearbyExchange: NearbyExchangeAction {
     get { self[NearbyExchangeActionKey.self] }
     set { self[NearbyExchangeActionKey.self] = newValue }
   }

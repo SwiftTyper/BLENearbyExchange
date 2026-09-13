@@ -1,7 +1,7 @@
+import BLENearbyExchangeCore
 import Foundation
 import Observation
 import SwiftUI
-import BLENearbyExchangeCore
 
 @MainActor
 @Observable
