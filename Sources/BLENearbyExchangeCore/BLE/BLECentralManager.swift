@@ -15,8 +15,6 @@ final class BLECentralManager: NSObject {
   private var controlChar: CBMCharacteristic?
   private var peripheral: CBMPeripheral?
 
-  var payload = Data()
-
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
   var onRoleReceived: ((_ role: ConnectionRole?) -> Void)?
@@ -112,8 +110,7 @@ final class BLECentralManager: NSObject {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
-    payload = Data()
-
+    
     onPayloadReceived = nil
     onRoleReceived = nil
     onPeerReceivedDataConfirmation = nil
