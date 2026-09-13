@@ -13,12 +13,18 @@ final class MockRanger: ProximityRanger {
     self.localToken = localToken
   }
 
+  override var isSupported: Bool {
+    true
+  }
+
   override func localDiscoveryToken() -> Data? {
     localToken
   }
 
   override func startRanging(peerToken: Data) throws {
-    if let rangingError { throw rangingError }
+    if let rangingError {
+      throw rangingError
+    }
     onStartRanging?(peerToken)
   }
 }

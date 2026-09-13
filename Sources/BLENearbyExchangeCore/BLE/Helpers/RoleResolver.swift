@@ -3,7 +3,17 @@ import Foundation
 /// Decides central vs. peripheral symmetrically: each device advertises a random
 /// nonce, both learn both nonces from the scan, and both apply the same rule so
 /// they can never disagree without exchanging a single extra message.
-enum RoleResolver {
+struct RoleResolver {
+  init(
+    makeNonce: @escaping () -> UInt64 = { RoleResolver.makeNonce() }
+  ) {
+    self.makeNonce = makeNonce
+  }
+
+  let makeNonce: () -> UInt64
+}
+
+extension RoleResolver {
   static func resolve(myNonce: UInt64, peerNonce: UInt64) -> ConnectionRole? {
     if myNonce == peerNonce {
       return nil
@@ -11,7 +21,7 @@ enum RoleResolver {
     return myNonce > peerNonce ? .central : .peripheral
   }
 
-  static func makeNonce() -> UInt64 {
+  private static func makeNonce() -> UInt64 {
     UInt64.random(in: .min ... .max)
   }
 

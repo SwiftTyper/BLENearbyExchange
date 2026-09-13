@@ -13,18 +13,18 @@ final class BLECentralManagerTests: XCTestCase {
 
     let roleReceived = expectation(description: "a role was resolved")
     let connected = expectation(description: "the peer connected")
-    
+
     central.onRoleReceived = { role in
       XCTAssertEqual(role, .central)
       roleReceived.fulfill()
     }
-    
+
     central.onConnected = { connected.fulfill() }
 
     central.startScanning(nonce: 2)
-    
+
     await fulfillment(of: [roleReceived, connected], timeout: 2)
-    
+
     XCTAssertTrue(peer.isConnected)
   }
 
@@ -41,12 +41,12 @@ final class BLECentralManagerTests: XCTestCase {
       XCTAssertEqual(role, .peripheral)
       roleReceived.fulfill()
     }
-    
+
     central.onConnected = { notConnected.fulfill() }
 
     central.startScanning(nonce: 2)
-    
-    await fulfillment(of: [roleReceived, notConnected], timeout: 2)
+
+    await fulfillment(of: [roleReceived, notConnected], timeout: 0.5)
   }
 
   func test_identicalNonceIsReportedAsACollision() async {
@@ -87,16 +87,16 @@ final class BLECentralManagerTests: XCTestCase {
 extension BLECentralManagerTests {
   func test_receivingPeersTokenStartsNIRanging() async {
     let peer = MockPeripheralSpy(nonce: 1)
-    
+
     let localToken = Data("local-token".utf8)
     let ranger = MockRanger(localToken: localToken)
 
     let central = await makeSUT(peer: peer, ranger: ranger)
 
     await connect(central, nonce: 2)
-    
+
     XCTAssertEqual(peer.handshakeToken, localToken)
-    
+
     let peerToken = Data("peer-token".utf8)
     let rangingStarted = expectation(description: "ranging started")
 
@@ -109,25 +109,25 @@ extension BLECentralManagerTests {
 
     await fulfillment(of: [rangingStarted], timeout: 2)
   }
-  
+
   func test_failureToCreateNITokenFailsHandshake() async {
     let peer = MockPeripheralSpy(nonce: 1)
     let ranger = MockRanger()
     ranger.localToken = nil
-    
+
     let central = await makeSUT(peer: peer, ranger: ranger)
-    
+
     let handshakeFailed = expectation(description: "the handshake failed")
-    
+
     central.onError = { error in
       XCTAssertEqual(error, .rangingFailed("No local discovery token."))
       handshakeFailed.fulfill()
     }
-    
+
     central.startScanning(nonce: 2)
-    
+
     await fulfillment(of: [handshakeFailed], timeout: 2)
-    
+
     XCTAssertNil(peer.handshakeToken)
   }
 
@@ -187,66 +187,66 @@ extension BLECentralManagerTests {
 
     await fulfillment(of: [payloadDelivered, sendCompleted], timeout: 2)
   }
-  
+
   func test_payloadIsDeliveredAndConfirmed() async {
     let peer = MockPeripheralSpy(nonce: 1)
-    
+
     let central = await makeSUT(peer: peer)
-    
+
     await connect(central, nonce: 2)
-    
+
     let payload = Data((0 ..< 500).map { UInt8($0 % 251) })
-    
+
     let payloadReceived = expectation(description: "the payload was received")
-    
+
     central.onPayloadReceived = { received in
       XCTAssertEqual(received, payload)
       payloadReceived.fulfill()
     }
-    
+
     let receiveCompleted = expectation(description: "the receive progress completed")
-    
+
     central.onReceiveProgress = { progress in
       guard progress.bytes == payload.count
       else { return }
-      
+
       receiveCompleted.fulfill()
     }
-    
+
     let receiptConfirmed = expectation(description: "receipt was confirmed to the peer")
-    
+
     peer.onControl = { control in
       XCTAssertEqual(control, .done)
       receiptConfirmed.fulfill()
     }
-    
+
     peer.send(payload: payload)
-    
+
     await fulfillment(
       of: [payloadReceived, receiveCompleted, receiptConfirmed],
       timeout: 2
     )
   }
-  
+
   func test_doneControlConfirmsThePeerReceivedThePayload() async {
     let peer = MockPeripheralSpy(nonce: 1)
-    
+
     let central = await makeSUT(peer: peer)
-    
+
     await connect(central, nonce: 2)
-    
+
     let receiptConfirmed = expectation(description: "the peer confirmed receipt")
-    
+
     central.onPeerReceivedDataConfirmation = {
       receiptConfirmed.fulfill()
     }
-    
+
     peer.send(.done)
-    
+
     await fulfillment(of: [receiptConfirmed], timeout: 2)
   }
 }
-  
+
 extension BLECentralManagerTests {
   func test_cancelledControlFailsTheExchange() async {
     let peer = MockPeripheralSpy(nonce: 1)
@@ -285,7 +285,7 @@ extension BLECentralManagerTests {
 
     await fulfillment(of: [exchangeFailed], timeout: 2)
   }
-  
+
   func test_terminatingWritesTheControlAndCallsBack() async {
     let peer = MockPeripheralSpy(nonce: 1)
 
@@ -353,25 +353,25 @@ extension BLECentralManagerTests {
     CBMCentralManagerMock.simulateRSSIDeviation(.none)
     CBMCentralManagerMock.simulatePeripherals([peer.spec])
     CBMCentralManagerMock.simulateInitialState(.poweredOn)
-    
+
     let central = BLECentralManager(
       configuration: .init(),
       ranger: ranger,
       forceMock: true
     )
-    
+
     let poweredOn = expectation(description: "the manager powered on")
-    
+
     central.onStateChange = { state in
       XCTAssertEqual(state, .poweredOn)
       poweredOn.fulfill()
     }
-    
+
     await fulfillment(of: [poweredOn], timeout: 2)
-    
+
     return central
   }
-  
+
   private func connect(
     _ central: BLECentralManager,
     nonce: UInt64,
@@ -379,11 +379,11 @@ extension BLECentralManagerTests {
     line: UInt = #line
   ) async {
     let connected = expectation(description: "the peer connected")
-    
+
     central.onConnected = {
       connected.fulfill()
     }
-    
+
     central.onError = {
       XCTFail(
         "Unexpected error while connecting: \($0).",
@@ -391,11 +391,11 @@ extension BLECentralManagerTests {
         line: line
       )
     }
-    
+
     central.startScanning(nonce: nonce)
-    
+
     await fulfillment(of: [connected], timeout: 2)
-    
+
     central.onError = nil
   }
 }

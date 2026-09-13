@@ -11,13 +11,16 @@ let package = Package(
     .library(name: "BLENearbyExchange", targets: ["BLENearbyExchange"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock", branch: "main"),
+    .package(
+      url: "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
+      branch: "feature/peripheral-manager-support"
+    ),
   ],
   targets: [
     .target(
       name: "BLENearbyExchange",
       dependencies: [
-        "BLENearbyExchangeCore"
+        "BLENearbyExchangeCore",
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

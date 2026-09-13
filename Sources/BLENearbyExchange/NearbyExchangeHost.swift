@@ -1,5 +1,5 @@
-import SwiftUI
 import BLENearbyExchangeCore
+import SwiftUI
 
 public extension View {
   func nearbyExchangeHost(

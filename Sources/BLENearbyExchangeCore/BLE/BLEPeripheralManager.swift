@@ -1,23 +1,21 @@
-import CoreBluetooth
+import CoreBluetoothMock
 import Foundation
 
 @BLEActor
 final class BLEPeripheralManager: NSObject {
   private let configuration: NearbyExchange.Configuration
 
-  private var manager: CBPeripheralManager!
-  private var handshakeChar: CBMutableCharacteristic!
-  private var payloadChar: CBMutableCharacteristic!
-  private var controlChar: CBMutableCharacteristic!
+  private var manager: CBMPeripheralManager!
+  private var handshakeChar: CBMMutableCharacteristic!
+  private var payloadChar: CBMMutableCharacteristic!
+  private var controlChar: CBMMutableCharacteristic!
+
   private var advertisingContinuation: CheckedContinuation<Void, Error>?
   private var serviceContinuation: CheckedContinuation<Void, Error>?
-  private var onTerminateSent: (() -> Void)?
-  private var pendingTerminate: GATT.Control?
-  private var isTerminating = false
   private var ranger: ProximityRanger
-  private var subscribedCentral: CBCentral?
+  private var subscribedCentral: CBMCentral?
 
-  var onStateChange: ((CBManagerState) -> Void)?
+  var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
   var onRoleConfirmed: (() -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
@@ -28,43 +26,55 @@ final class BLEPeripheralManager: NSObject {
 
   var payload = Data()
 
-  private var outbox: [Data] = []
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
 
+  private var centralSubscribedCharacteristics: Set<String> = []
+  private var terminationCompletion: (() -> Void)?
+  private let transferQueue: UnlimitedTransferQueue = .init()
+
   init(
     configuration: NearbyExchange.Configuration,
-    ranger: ProximityRanger
+    ranger: ProximityRanger,
+    forceMock: Bool
   ) {
     self.configuration = configuration
     self.ranger = ranger
+
     super.init()
 
-    manager = CBPeripheralManager(
+    manager = CBMPeripheralManagerFactory.instance(
       delegate: self,
       queue: BLEActor.queue,
-      options: nil
+      options: nil,
+      forceMock: forceMock
     )
   }
 
   func startAdvertising(nonce: UInt64) async throws {
     manager.removeAllServices()
 
-    handshakeChar = CBMutableCharacteristic(
-      type: GATT.handshake.cbuuid, properties: [.notify, .write],
-      value: nil, permissions: [.writeable]
+    handshakeChar = CBMMutableCharacteristic(
+      type: GATT.handshake.cbuuid,
+      properties: [.notify, .write],
+      value: nil,
+      permissions: [.writeable]
     )
-    payloadChar = CBMutableCharacteristic(
-      type: GATT.payload.cbuuid, properties: [.writeWithoutResponse, .notify],
-      value: nil, permissions: [.writeable]
+    payloadChar = CBMMutableCharacteristic(
+      type: GATT.payload.cbuuid,
+      properties: [.writeWithoutResponse, .notify],
+      value: nil,
+      permissions: [.writeable]
     )
-    controlChar = CBMutableCharacteristic(
-      type: GATT.control.cbuuid, properties: [.write, .notify],
-      value: nil, permissions: [.writeable]
+    controlChar = CBMMutableCharacteristic(
+      type: GATT.control.cbuuid,
+      properties: [.write, .notify],
+      value: nil,
+      permissions: [.writeable]
     )
 
-    let service = CBMutableService(
+    let service = CBMMutableService(
       type: configuration.serviceUUID.cbuuid,
       primary: true
     )
@@ -78,8 +88,8 @@ final class BLEPeripheralManager: NSObject {
     try await withCheckedThrowingContinuation { continuation in
       advertisingContinuation = continuation
       manager.startAdvertising([
-        CBAdvertisementDataServiceUUIDsKey: [configuration.serviceUUID.cbuuid],
-        CBAdvertisementDataLocalNameKey: RoleResolver.encode(nonce).base64EncodedString(),
+        CBMAdvertisementDataServiceUUIDsKey: [configuration.serviceUUID.cbuuid],
+        CBMAdvertisementDataLocalNameKey: RoleResolver.encode(nonce).base64EncodedString(),
       ])
     }
   }
@@ -88,36 +98,25 @@ final class BLEPeripheralManager: NSObject {
     _ control: GATT.Control,
     completion: @escaping () -> Void
   ) {
-    guard subscribedCentral != nil, controlChar != nil
-    else { return completion() }
+    terminationCompletion = completion
 
-    isTerminating = true
-    outbox.removeAll()
+    transferQueue.clear()
 
-    if sendTerminateFrame(control) {
-      completion()
-    } else {
-      pendingTerminate = control
-      onTerminateSent = completion
+    transferQueue.add { [weak self] in
+      guard let self else { return false }
+
+      let result = manager.updateValue(
+        Data([control.rawValue]),
+        for: self.controlChar,
+        onSubscribedCentrals: nil
+      )
+
+      if result, self.terminationCompletion != nil {
+        completion()
+      }
+
+      return result
     }
-  }
-
-  private func sendTerminateFrame(_ control: GATT.Control) -> Bool {
-    manager.updateValue(
-      Data([control.rawValue]),
-      for: controlChar,
-      onSubscribedCentrals: nil
-    )
-  }
-
-  private func flushTerminate() {
-    pendingTerminate = nil
-
-    guard let completion = onTerminateSent
-    else { return }
-
-    onTerminateSent = nil
-    completion()
   }
 
   func stop() {
@@ -136,15 +135,14 @@ final class BLEPeripheralManager: NSObject {
     controlChar = nil
     subscribedCentral = nil
 
-    outbox.removeAll()
+    transferQueue.clear()
+    terminationCompletion = nil
+
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
     payload = Data()
 
-    onTerminateSent = nil
-    pendingTerminate = nil
-    isTerminating = false
     onPayloadReceived = nil
     onRoleConfirmed = nil
     onPeerReceivedDataConfirmation = nil
@@ -155,33 +153,35 @@ final class BLEPeripheralManager: NSObject {
   }
 
   func send(payload: Data) {
-    guard !isTerminating, let mtu = subscribedCentral?.maximumUpdateValueLength
+    guard let mtu = subscribedCentral?.maximumUpdateValueLength
     else { return }
 
-    outbox = Chunker.chunk(payload, mtu: mtu)
     sentBytes = 0
     payloadBytes = payload.count
-    onSendProgress?(sendProgress)
-    drainOutbox()
+
+    for chunk in Chunker.chunk(payload, mtu: mtu) {
+      transferQueue.add { [weak self] in
+        guard let self else { return false }
+
+        let result = self.manager.updateValue(
+          chunk,
+          for: self.payloadChar,
+          onSubscribedCentrals: nil
+        )
+
+        if result {
+          sentBytes += chunk.count - Chunker.headerSize
+        }
+
+        self.onSendProgress?(sendProgress)
+
+        return result
+      }
+    }
   }
 
   func confirmSent() {
     sentBytes = payloadBytes
-    onSendProgress?(sendProgress)
-  }
-
-  private func drainOutbox() {
-    guard !isTerminating, !outbox.isEmpty else { return }
-
-    while let frame = outbox.first {
-      if manager.updateValue(frame, for: payloadChar, onSubscribedCentrals: nil) {
-        outbox.removeFirst()
-        sentBytes += frame.count - Chunker.headerSize
-      } else {
-        break
-      }
-    }
-
     onSendProgress?(sendProgress)
   }
 
@@ -190,15 +190,15 @@ final class BLEPeripheralManager: NSObject {
   }
 }
 
-extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
+extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
   func peripheralManagerDidUpdateState(
-    _ peripheral: CBPeripheralManager
+    _ peripheral: CBMPeripheralManager
   ) {
     onStateChange?(peripheral.state)
   }
 
   func peripheralManagerDidStartAdvertising(
-    _: CBPeripheralManager,
+    _: CBMPeripheralManager,
     error: Error?
   ) {
     if let error {
@@ -210,10 +210,10 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
     }
     advertisingContinuation = nil
   }
-  
+
   func peripheralManager(
-    _: CBPeripheralManager,
-    didAdd _: CBService,
+    _: CBMPeripheralManager,
+    didAdd _: CBMService,
     error: Error?
   ) {
     if let error {
@@ -227,28 +227,44 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
 
   func peripheralManager(
-    _: CBPeripheralManager,
-    central: CBCentral,
-    didSubscribeTo _: CBCharacteristic
+    _: CBMPeripheralManager,
+    central: CBMCentral,
+    didSubscribeTo characteristic: CBMCharacteristic
   ) {
-    subscribedCentral = central
-    onRoleConfirmed?()
-    onConnected?()
+    let requiredGATTIds = [GATT.handshake.cbuuid, GATT.payload.cbuuid, GATT.control.cbuuid]
+      .map(\.uuidString)
+
+    centralSubscribedCharacteristics.insert(characteristic.uuid.uuidString)
+
+    if centralSubscribedCharacteristics.isSuperset(of: requiredGATTIds) {
+      subscribedCentral = central
+      onRoleConfirmed?()
+      onConnected?()
+    }
   }
 
   func peripheralManager(
-    _: CBPeripheralManager,
-    central _: CBCentral,
-    didUnsubscribeFrom _: CBCharacteristic
+    _: CBMPeripheralManager,
+    central _: CBMCentral,
+    didUnsubscribeFrom characterisitc: CBMCharacteristic
   ) {
-    subscribedCentral = nil
-    flushTerminate()
-    onError?(.disconnected)
+    centralSubscribedCharacteristics.remove(characterisitc.uuid.uuidString)
+
+    if centralSubscribedCharacteristics.isEmpty {
+      subscribedCentral = nil
+
+      if let terminationCompletion {
+        terminationCompletion()
+        self.terminationCompletion = nil
+      }
+
+      onError?(.disconnected)
+    }
   }
 
   func peripheralManager(
-    _ peripheral: CBPeripheralManager,
-    didReceiveWrite requests: [CBATTRequest]
+    _ peripheral: CBMPeripheralManager,
+    didReceiveWrite requests: [CBMATTRequest]
   ) {
     for request in requests {
       switch request.characteristic.uuid {
@@ -269,11 +285,15 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
 
         peripheral.respond(to: request, withResult: .success)
 
-        peripheral.updateValue(
-          localToken,
-          for: handshakeChar,
-          onSubscribedCentrals: nil
-        )
+        transferQueue.add { [weak self] in
+          guard let self else { return false }
+
+          return peripheral.updateValue(
+            localToken,
+            for: self.handshakeChar,
+            onSubscribedCentrals: nil
+          )
+        }
 
         do {
           try ranger.startRanging(peerToken: peerToken)
@@ -291,11 +311,15 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
         guard let full
         else { continue }
 
-        peripheral.updateValue(
-          Data([GATT.Control.done.rawValue]),
-          for: controlChar,
-          onSubscribedCentrals: nil
-        )
+        transferQueue.add { [weak self] in
+          guard let self else { return false }
+
+          return peripheral.updateValue(
+            Data([GATT.Control.done.rawValue]),
+            for: self.controlChar,
+            onSubscribedCentrals: nil
+          )
+        }
 
         onPayloadReceived?(full)
 
@@ -328,14 +352,8 @@ extension BLEPeripheralManager: @BLEActor CBPeripheralManagerDelegate {
   }
 
   func peripheralManagerIsReady(
-    toUpdateSubscribers _: CBPeripheralManager
+    toUpdateSubscribers _: CBMPeripheralManager
   ) {
-    if let pendingTerminate {
-      guard sendTerminateFrame(pendingTerminate) else { return }
-      flushTerminate()
-      return
-    }
-
-    drainOutbox()
+    transferQueue.resume()
   }
 }

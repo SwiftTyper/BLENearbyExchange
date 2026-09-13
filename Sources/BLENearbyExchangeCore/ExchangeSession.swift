@@ -8,10 +8,11 @@ public final class ExchangeSession: TimeoutController {
   private let centralState = AsyncCurrentValue<CBMManagerState>(.unknown)
   private let peripheralState = AsyncCurrentValue<CBMManagerState>(.unknown)
 
+  private let configuration: NearbyExchange.Configuration
+  private let roleResolver: RoleResolver
+  private var ranger: ProximityRanger?
   private var peripheral: BLEPeripheralManager?
   private var central: BLECentralManager?
-  private var ranger: ProximityRanger?
-  private let configuration: NearbyExchange.Configuration
 
   public private(set) var isRunning = false
   private var role: ConnectionRole?
@@ -25,38 +26,54 @@ public final class ExchangeSession: TimeoutController {
   private var received = TransferProgress()
   private var progress: Double = 0
 
-  public nonisolated init(
+  public convenience init(
     configuration: NearbyExchange.Configuration
   ) {
+    self.init(
+      configuration: configuration,
+      ranger: ProximityRanger(),
+      roleResolver: RoleResolver(),
+      forceMock: false
+    )
+  }
+
+  init(
+    configuration: NearbyExchange.Configuration,
+    ranger: ProximityRanger,
+    roleResolver: RoleResolver,
+    forceMock: Bool
+  ) {
     self.configuration = configuration
+    self.roleResolver = roleResolver
 
     super.init()
 
-    BLEActor.queue.sync {
-      BLEActor.assumeIsolated {
-        let ranger = ProximityRanger()
-        self.ranger = ranger
-        self.peripheral = .init(
-          configuration: configuration,
-          ranger: ranger
-        )
-        self.central = .init(
-          configuration: configuration,
-          ranger: ranger
-        )
-        self.peripheral?.onStateChange = { [weak self] in
-          guard let mapped = CBMManagerState(rawValue: $0.rawValue) else { return }
-          self?.peripheralState.send(mapped)
-        }
-        self.central?.onStateChange = { [weak self] in
-          self?.centralState.send($0)
-        }
-      }
+    self.ranger = ranger
+
+    peripheral = .init(
+      configuration: configuration,
+      ranger: ranger,
+      forceMock: forceMock
+    )
+
+    central = .init(
+      configuration: configuration,
+      ranger: ranger,
+      forceMock: forceMock
+    )
+
+    peripheral?.onStateChange = { [weak self] in
+      guard let mapped = CBMManagerState(rawValue: $0.rawValue) else { return }
+      self?.peripheralState.send(mapped)
+    }
+
+    central?.onStateChange = { [weak self] in
+      self?.centralState.send($0)
     }
   }
 
   public func start(payload: Data) async throws {
-    guard ProximityRanger.isSupported
+    guard ranger?.isSupported == true
     else { throw ExchangeError.unsupported }
 
     try await waitForPoweredOn(peripheralState)
@@ -74,7 +91,7 @@ public final class ExchangeSession: TimeoutController {
     peripheral?.payload = payload
     central?.payload = payload
     wireCallbacks()
-    let nonce = RoleResolver.makeNonce()
+    let nonce = roleResolver.makeNonce()
     try await peripheral?.startAdvertising(nonce: nonce)
     central?.startScanning(nonce: nonce)
 
@@ -91,7 +108,7 @@ public final class ExchangeSession: TimeoutController {
     try await beginHandshake()
   }
 
-  public override func timeoutDidFire() {
+  override public func timeoutDidFire() {
     fail(.timedOut)
   }
 
