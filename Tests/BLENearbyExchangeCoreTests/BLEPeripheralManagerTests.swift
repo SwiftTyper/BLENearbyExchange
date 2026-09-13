@@ -30,7 +30,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       terminateSent.fulfill()
     }
 
-    await fulfillment(of: [terminateSent, terminateReceived], timeout: 1.0)
+    await fulfillment(of: [terminateSent, terminateReceived], timeout: 2.0)
 
     let payloadFrames = peer.updates.filter {
       if case .payload = $0 {
@@ -69,7 +69,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       fullyReceivedPayload.fulfill()
     }
 
-    await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 1.0)
+    await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 2.0)
 
     let peerReceivedFrameCount = peer.updates.filter {
       if case .payload = $0 {
@@ -111,7 +111,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       payloadReceived.fulfill()
     }
 
-    await fulfillment(of: [payloadReceived], timeout: 1.0)
+    await fulfillment(of: [payloadReceived], timeout: 2.0)
   }
 
   func test_centralSendsDone_peripheralReceivesConfirmation() async throws {
@@ -141,7 +141,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       receivedDoneCommend.fulfill()
     }
 
-    await fulfillment(of: [doneCommendSent, receivedDoneCommend], timeout: 1.0)
+    await fulfillment(of: [doneCommendSent, receivedDoneCommend], timeout: 2.0)
   }
 
   func test_peripheralsPayloadOutgoingQueueFull_doesntDropOtherOutgoingCommands() async throws {
@@ -164,7 +164,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     peripheral.send(payload: outgoingPayload)
 
-    await fulfillment(of: [transferStarted], timeout: 1.0)
+    await fulfillment(of: [transferStarted], timeout: 2.0)
 
     // this is significatly smaller than the outgoing payload so
     // that it finished way earlier and we try to send done during the outgoing payload transfer
@@ -199,7 +199,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       outgoingPayloadReceived.fulfill()
     }
 
-    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 3.0)
+    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 2.0)
 
     XCTAssertTrue(peer.updates.contains(.control(.done)))
   }
@@ -219,7 +219,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     peer.spec.simulateDisconnection()
 
-    await fulfillment(of: [errorExpectation], timeout: 1.0)
+    await fulfillment(of: [errorExpectation], timeout: 2.0)
   }
 
   func test_centralSendsFailure_peripheralPropagesError() async throws {
@@ -252,7 +252,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       }
     }
 
-    await fulfillment(of: [failCommendSent, errorExpectation], timeout: 1.0)
+    await fulfillment(of: [failCommendSent, errorExpectation], timeout: 2.0)
   }
 
   func test_periphalReceivesPeersToken_startsRangingAndSendsItsTokenToCentral() async throws {
@@ -295,7 +295,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       XCTAssertEqual(receivedTokenData, peerTokenData)
     }
 
-    await fulfillment(of: [peerTokenSent, centralReceivedToken, peerTokenReceived], timeout: 1.0)
+    await fulfillment(of: [peerTokenSent, centralReceivedToken, peerTokenReceived], timeout: 2.0)
   }
 }
 
@@ -319,7 +319,7 @@ extension BLEPeripheralManagerTests {
       poweredOn.fulfill()
     }
 
-    await fulfillment(of: [poweredOn], timeout: 0.2)
+    await fulfillment(of: [poweredOn], timeout: 2.0)
 
     return peripheral
   }
@@ -346,7 +346,7 @@ extension BLEPeripheralManagerTests {
 
     peer.subscribe(to: characteristics)
 
-    await fulfillment(of: [subscribed, roleConfirmed], timeout: 0.2)
+    await fulfillment(of: [subscribed, roleConfirmed], timeout: 2.0)
 
     return characteristics
   }

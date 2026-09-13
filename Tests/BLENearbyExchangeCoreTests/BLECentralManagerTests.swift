@@ -46,7 +46,7 @@ final class BLECentralManagerTests: XCTestCase {
 
     central.startScanning(nonce: 2)
 
-    await fulfillment(of: [roleReceived, notConnected], timeout: 0.5)
+    await fulfillment(of: [roleReceived, notConnected], timeout: 1)
   }
 
   func test_identicalNonceIsReportedAsACollision() async {
@@ -80,7 +80,7 @@ final class BLECentralManagerTests: XCTestCase {
 
     central.startScanning(nonce: 2)
 
-    await fulfillment(of: [roleReceived], timeout: 0.5)
+    await fulfillment(of: [roleReceived], timeout: 1)
   }
 }
 

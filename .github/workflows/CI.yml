@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: xcode-27
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Select Xcode
+      run: sudo xcode-select -switch /Applications/Xcode_27_beta_6.app
+
+    - name: Build & Test
+      run: |
+        xcodebuild test \
+          -scheme BLENearbyExchange \
+          -destination 'platform=macOS' \
+          -skipPackagePluginValidation

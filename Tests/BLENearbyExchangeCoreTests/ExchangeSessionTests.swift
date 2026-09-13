@@ -27,7 +27,7 @@ final class ExchangeSessionTests: XCTestCase {
 
     try await session.start(payload: Data())
 
-    await fulfillment(of: [connected], timeout: 5)
+    await fulfillment(of: [connected], timeout: 2)
 
     XCTAssertEqual(log.withLock { $0 }, [.nonce(1), .nonce(2), .connected])
     XCTAssertTrue(peer.isConnected)
@@ -54,7 +54,7 @@ final class ExchangeSessionTests: XCTestCase {
 
     try await session.start(payload: Data())
 
-    await fulfillment(of: [connected], timeout: 2)
+    await fulfillment(of: [connected], timeout: 1)
 
     XCTAssertGreaterThan(log.withLock { $0 }.count, 1)
     XCTAssertFalse(peer.isConnected)
@@ -80,7 +80,7 @@ final class ExchangeSessionTests: XCTestCase {
 
     try await session.start(payload: Data())
 
-    await fulfillment(of: [connected], timeout: 5)
+    await fulfillment(of: [connected], timeout: 2)
 
     XCTAssertEqual(log.withLock { $0 }, [.nonce(2), .connected])
     XCTAssertTrue(peer.isConnected)

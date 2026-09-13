@@ -3,6 +3,9 @@
 /Packages
 xcuserdata/
 DerivedData/
-.swiftpm/
+.swiftpm/*
+!.swiftpm/xcode/
+.swiftpm/xcode/*
+!.swiftpm/xcode/xcshareddata/
 *.xcodeproj
 Diagrams/*.png
