@@ -69,7 +69,7 @@ public class ProximityRanger: NSObject {
 
 #if !os(macOS)
   extension ProximityRanger: @BLEActor NISessionDelegate {
-    func session(
+    public func session(
       _: NISession,
       didUpdate nearbyObjects: [NINearbyObject],
     ) {
@@ -79,7 +79,7 @@ public class ProximityRanger: NSObject {
       onDistance?(distance)
     }
 
-    func session(_: NISession, didInvalidateWith error: Error) {
+    public func session(_: NISession, didInvalidateWith error: Error) {
       onError?(error)
     }
   }
