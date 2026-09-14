@@ -24,8 +24,6 @@ final class BLEPeripheralManager: NSObject {
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
 
-  var payload = Data()
-
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
@@ -141,7 +139,6 @@ final class BLEPeripheralManager: NSObject {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
-    payload = Data()
 
     onPayloadReceived = nil
     onRoleConfirmed = nil

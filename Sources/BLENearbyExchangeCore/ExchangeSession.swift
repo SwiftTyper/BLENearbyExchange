@@ -63,8 +63,7 @@ public final class ExchangeSession: TimeoutController {
     )
 
     peripheral?.onStateChange = { [weak self] in
-      guard let mapped = CBMManagerState(rawValue: $0.rawValue) else { return }
-      self?.peripheralState.send(mapped)
+      self?.peripheralState.send($0)
     }
 
     central?.onStateChange = { [weak self] in
@@ -88,8 +87,6 @@ public final class ExchangeSession: TimeoutController {
   }
 
   private func beginHandshake() async throws {
-    peripheral?.payload = payload
-    central?.payload = payload
     wireCallbacks()
     let nonce = roleResolver.makeNonce()
     try await peripheral?.startAdvertising(nonce: nonce)
