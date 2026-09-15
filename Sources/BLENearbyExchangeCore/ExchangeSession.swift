@@ -14,7 +14,6 @@ public final class ExchangeSession: TimeoutController {
   private var peripheral: BLEPeripheralInterface?
   private var central: BLECentralInterface?
 
-  public private(set) var isRunning = false
   private var role: ConnectionRole?
   private var payload = Data()
   private var didPeerReceive = false
@@ -87,8 +86,6 @@ public final class ExchangeSession: TimeoutController {
     didFail = false
     self.payload = payload
     try await beginHandshake()
-
-    isRunning = true
   }
 
   private func beginHandshake() async throws {
@@ -196,7 +193,6 @@ public final class ExchangeSession: TimeoutController {
     sent = TransferProgress()
     received = TransferProgress()
     progress = 0
-    isRunning = false
   }
 
   private func wireCallbacks() {
