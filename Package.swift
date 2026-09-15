@@ -39,6 +39,7 @@ let package = Package(
       name: "BLENearbyExchangeCoreTests",
       dependencies: [
         "BLENearbyExchangeCore",
+        .product(name: "CoreBluetoothMock", package: "iOS-CoreBluetooth-Mock"),
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

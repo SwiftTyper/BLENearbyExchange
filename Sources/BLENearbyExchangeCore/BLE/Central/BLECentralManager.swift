@@ -3,7 +3,7 @@ import CoreBluetoothMock
 import Foundation
 
 @BLEActor
-final class BLECentralManager: NSObject {
+final class BLECentralManager: NSObject, BLECentralInterface {
   private let configuration: NearbyExchange.Configuration
 
   private var nonce: UInt64?
@@ -52,7 +52,7 @@ final class BLECentralManager: NSObject {
 
     manager.scanForPeripherals(
       withServices: [configuration.serviceUUID.cbuuid],
-      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true], // TODO:
+      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true], /// TODO:
     )
   }
 
@@ -149,6 +149,7 @@ final class BLECentralManager: NSObject {
     }
   }
 
+  /// TODO
   func confirmSent() {
     sentBytes = payloadBytes
     onSendProgress?(sendProgress)

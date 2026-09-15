@@ -11,8 +11,8 @@ public final class ExchangeSession: TimeoutController {
   private let configuration: NearbyExchange.Configuration
   private let roleResolver: RoleResolver
   private var ranger: ProximityRanger?
-  private var peripheral: BLEPeripheralManager?
-  private var central: BLECentralManager?
+  private var peripheral: BLEPeripheralInterface?
+  private var central: BLECentralInterface?
 
   public private(set) var isRunning = false
   private var role: ConnectionRole?
@@ -29,11 +29,26 @@ public final class ExchangeSession: TimeoutController {
   public convenience init(
     configuration: NearbyExchange.Configuration,
   ) {
+    let ranger = ProximityRanger()
+    
+    let peripheral = BLEPeripheralManager(
+      configuration: configuration,
+      ranger: ranger,
+      forceMock: false,
+    )
+    
+    let central = BLECentralManager(
+      configuration: configuration,
+      ranger: ranger,
+      forceMock: false
+    )
+    
     self.init(
       configuration: configuration,
-      ranger: ProximityRanger(),
+      ranger: ranger,
       roleResolver: RoleResolver(),
-      forceMock: false,
+      central: central,
+      peripheral: peripheral
     )
   }
 
@@ -41,32 +56,22 @@ public final class ExchangeSession: TimeoutController {
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
     roleResolver: RoleResolver,
-    forceMock: Bool,
+    central: any BLECentralInterface,
+    peripheral: any BLEPeripheralInterface
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
-
-    super.init()
-
     self.ranger = ranger
-
-    peripheral = .init(
-      configuration: configuration,
-      ranger: ranger,
-      forceMock: forceMock,
-    )
-
-    central = .init(
-      configuration: configuration,
-      ranger: ranger,
-      forceMock: forceMock,
-    )
-
-    peripheral?.onStateChange = { [weak self] in
+    self.peripheral = peripheral
+    self.central = central
+    
+    super.init()
+    
+    self.peripheral?.onStateChange = { [weak self] in
       self?.peripheralState.send($0)
     }
-
-    central?.onStateChange = { [weak self] in
+    
+    self.central?.onStateChange = { [weak self] in
       self?.centralState.send($0)
     }
   }
