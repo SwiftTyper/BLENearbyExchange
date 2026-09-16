@@ -47,7 +47,8 @@ public final class ExchangeSession: TimeoutController {
       ranger: ranger,
       roleResolver: RoleResolver(),
       central: central,
-      peripheral: peripheral
+      peripheral: peripheral,
+      clock: .continuous
     )
   }
 
@@ -56,7 +57,8 @@ public final class ExchangeSession: TimeoutController {
     ranger: ProximityRanger,
     roleResolver: RoleResolver,
     central: any BLECentralInterface,
-    peripheral: any BLEPeripheralInterface
+    peripheral: any BLEPeripheralInterface,
+    clock: any Clock<Duration>
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
@@ -64,7 +66,7 @@ public final class ExchangeSession: TimeoutController {
     self.peripheral = peripheral
     self.central = central
     
-    super.init()
+    super.init(clock: clock)
     
     self.peripheral?.onStateChange = { [weak self] in
       self?.peripheralState.send($0)

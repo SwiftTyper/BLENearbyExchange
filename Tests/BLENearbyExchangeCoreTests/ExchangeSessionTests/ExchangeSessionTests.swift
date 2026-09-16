@@ -4,6 +4,7 @@ import CoreBluetoothMock
 import Foundation
 import Synchronization
 import XCTest
+import Clocks
 
 @BLEActor
 final class ExchangeSessionTests: XCTestCase {
@@ -146,14 +147,48 @@ final class ExchangeSessionTests: XCTestCase {
       ],
     )
   }
+  
+  func test_timesOut_whenItDoesntConnectWithPeerInTime() async throws {
+    let clock = TestClock()
+    let (session, _, _) = makeSUT(clock: clock)
+    
+    try await session.start(payload: Data())
+    
+    let timeoutEvent = expectation(description: "session did timeout")
+    
+    let events = session.events.receive()
+    
+    let observer = Task {
+      for await event in events {
+        XCTAssertEqual(event, .failed(.timedOut))
+        timeoutEvent.fulfill()
+      }
+    }
+    
+    defer { observer.cancel() }
+    
+    await clock.advance(by: .seconds(60))
+    
+    await fulfillment(of: [timeoutEvent], timeout: 1.0)
+  }
+  
+  func test_cancelsTimer_afterConnectingWithPeer() async throws {
+    
+  }
+  
+  func test_successfullyExchangesData() async throws {
+    
+  }
+  
 }
 
 extension ExchangeSessionTests {
   private func makeSUT(
-    localNonces: [UInt64],
+    localNonces: [UInt64] = [1],
     ranger: MockRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
+    clock: any Clock<Duration> = .unimplemented()
   ) -> (session: ExchangeSession, central: BLECentralSpy, peripheral: BLEPeripheralSpy) {
     let central = BLECentralSpy()
     let peripheral = BLEPeripheralSpy()
@@ -172,6 +207,7 @@ extension ExchangeSessionTests {
       ),
       central: central,
       peripheral: peripheral,
+      clock: clock
     )
 
     central.onStateChange?(.poweredOn)

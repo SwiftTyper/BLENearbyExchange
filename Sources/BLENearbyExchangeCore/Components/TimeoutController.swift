@@ -2,28 +2,28 @@ import Foundation
 
 @BLEActor
 public class TimeoutController {
-  private var timer: DispatchSourceTimer?
+  private var clock: any Clock<Duration>
+  private var task: Task<Void, Never>?
 
-  nonisolated init() {}
+  nonisolated init(
+    clock: any Clock<Duration>
+  ) {
+    self.clock = clock
+  }
 
-  func startTimer(with timeout: TimeInterval) {
-    timer?.cancel()
-
-    let source = DispatchSource.makeTimerSource(queue: BLEActor.queue)
-    source.schedule(deadline: .now() + timeout, leeway: .milliseconds(10))
-    source.setEventHandler { [weak self] in
-      guard let self else { return }
-      timer = nil
+  func startTimer(with timeout: Int) {
+    guard task == nil else { return }
+    
+    self.task = Task {
+      try? await clock.sleep(for: .seconds(timeout), tolerance: .milliseconds(10))
+      guard !Task.isCancelled else { return }
       timeoutDidFire()
     }
-
-    timer = source
-    source.resume()
   }
 
   func cancelTimer() {
-    timer?.cancel()
-    timer = nil
+    task?.cancel()
+    task = nil
   }
 
   open func timeoutDidFire() {}
