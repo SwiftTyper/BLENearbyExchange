@@ -176,15 +176,15 @@ extension ExchangeSessionTests {
   
   func test_cancelsTimer_afterConnectingWithPeer() async throws {
     let localNonce: UInt64 = 2
-
+    
     let clock = TestClock()
     let (session, central, _) = makeSUT(localNonces: [localNonce], clock: clock)
-
+    
     let sessionNeverTimesOut = expectation(description: "session doesn't timeout")
     sessionNeverTimesOut.isInverted = true
-
+    
     let events = session.events.receive()
-
+    
     let observer = Task {
       for await event in events {
         switch event {
@@ -193,16 +193,30 @@ extension ExchangeSessionTests {
         }
       }
     }
-
+    
     defer { observer.cancel() }
-
+    
     try await session.start(payload: Data())
-
+    
     central.onConnected?()
-
+    
     await clock.advance(by: .seconds(60))
-
+    
     await fulfillment(of: [sessionNeverTimesOut], timeout: 0.2)
+  }
+}
+
+extension ExchangeSessionTests {
+  func test_desiredRangeNotReached_doesntSendPayload() async throws {
+    
+  }
+  
+  func test_reachesDesiredRanger_sendsPayload() async throws {
+    
+  }
+  
+  func test_receivesError_failsSessionAndPropagesError() async throws {
+    
   }
   
   func test_successfullyExchangesData() async throws {
