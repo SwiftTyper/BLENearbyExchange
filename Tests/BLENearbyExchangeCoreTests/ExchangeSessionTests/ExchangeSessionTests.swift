@@ -12,19 +12,19 @@ final class ExchangeSessionTests: XCTestCase {
     let peerNonce: UInt64 = 1
     let collidingLocalNonce: UInt64 = 1
     let freshLocalNonce: UInt64 = 2
-
+    
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce, freshLocalNonce],
     )
-
+    
     let restarted = expectation(description: "the handshake restarted")
     central.onStartScanning = { nonce in
       guard nonce == freshLocalNonce else { return }
       restarted.fulfill()
     }
-
+    
     let connected = expectation(description: "the peer connected")
-
+    
     let events = session.events.receive()
     let observer = Task {
       for await event in events {
@@ -33,18 +33,18 @@ final class ExchangeSessionTests: XCTestCase {
       }
     }
     defer { observer.cancel() }
-
+    
     try await session.start(payload: Data())
-
+    
     simulatePeerDiscovery(advertising: peerNonce, on: central)
-
+    
     await fulfillment(of: [restarted], timeout: 1)
-
+    
     simulatePeerDiscovery(advertising: peerNonce, on: central)
     central.onConnected?()
-
+    
     await fulfillment(of: [connected], timeout: 1)
-
+    
     XCTAssertEqual(
       central.calls,
       [
@@ -63,28 +63,28 @@ final class ExchangeSessionTests: XCTestCase {
       ],
     )
   }
-
+  
   func test_unresolvedNonceCollisionKeepsRestartingTheHandshake() async throws {
     let peerNonce: UInt64 = 1
     let collidingLocalNonce: UInt64 = 1
-
+    
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce],
     )
-
+    
     try await session.start(payload: Data())
-
+    
     for _ in 0 ..< 2 {
       let restarted = expectation(description: "the handshake restarted")
       central.onStartScanning = { _ in
         restarted.fulfill()
       }
-
+      
       simulatePeerDiscovery(advertising: peerNonce, on: central)
-
+      
       await fulfillment(of: [restarted], timeout: 1)
     }
-
+    
     XCTAssertEqual(
       central.calls,
       [
@@ -106,17 +106,17 @@ final class ExchangeSessionTests: XCTestCase {
       ],
     )
   }
-
+  
   func test_distinctNoncesSucessfullyResolveARole() async throws {
     let peerNonce: UInt64 = 1
     let localNonce: UInt64 = 2
-
+    
     let (session, central, peripheral) = makeSUT(
       localNonces: [localNonce],
     )
-
+    
     let connected = expectation(description: "the peer connected")
-
+    
     let events = session.events.receive()
     let observer = Task {
       for await event in events {
@@ -125,14 +125,14 @@ final class ExchangeSessionTests: XCTestCase {
       }
     }
     defer { observer.cancel() }
-
+    
     try await session.start(payload: Data())
-
+    
     simulatePeerDiscovery(advertising: peerNonce, on: central)
     central.onConnected?()
-
+    
     await fulfillment(of: [connected], timeout: 1)
-
+    
     XCTAssertEqual(
       central.calls,
       [
@@ -147,7 +147,9 @@ final class ExchangeSessionTests: XCTestCase {
       ],
     )
   }
-  
+}
+
+extension ExchangeSessionTests {
   func test_timesOut_whenItDoesntConnectWithPeerInTime() async throws {
     let clock = TestClock()
     let (session, _, _) = makeSUT(clock: clock)
@@ -173,13 +175,39 @@ final class ExchangeSessionTests: XCTestCase {
   }
   
   func test_cancelsTimer_afterConnectingWithPeer() async throws {
-    
+    let localNonce: UInt64 = 2
+
+    let clock = TestClock()
+    let (session, central, _) = makeSUT(localNonces: [localNonce], clock: clock)
+
+    let sessionNeverTimesOut = expectation(description: "session doesn't timeout")
+    sessionNeverTimesOut.isInverted = true
+
+    let events = session.events.receive()
+
+    let observer = Task {
+      for await event in events {
+        switch event {
+        case .failed(.timedOut): sessionNeverTimesOut.fulfill()
+        default: break
+        }
+      }
+    }
+
+    defer { observer.cancel() }
+
+    try await session.start(payload: Data())
+
+    central.onConnected?()
+
+    await clock.advance(by: .seconds(60))
+
+    await fulfillment(of: [sessionNeverTimesOut], timeout: 0.2)
   }
   
   func test_successfullyExchangesData() async throws {
     
   }
-  
 }
 
 extension ExchangeSessionTests {
@@ -188,7 +216,7 @@ extension ExchangeSessionTests {
     ranger: MockRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
-    clock: any Clock<Duration> = .unimplemented()
+    clock: any Clock<Duration> = .continuous
   ) -> (session: ExchangeSession, central: BLECentralSpy, peripheral: BLEPeripheralSpy) {
     let central = BLECentralSpy()
     let peripheral = BLEPeripheralSpy()

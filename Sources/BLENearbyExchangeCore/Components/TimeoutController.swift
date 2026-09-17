@@ -14,10 +14,12 @@ public class TimeoutController {
   func startTimer(with timeout: Int) {
     guard task == nil else { return }
     
-    self.task = Task {
-      try? await clock.sleep(for: .seconds(timeout), tolerance: .milliseconds(10))
+    self.task = Task { [weak self] in
+      try? await self?.clock.sleep(for: .seconds(timeout), tolerance: .milliseconds(10))
+      
       guard !Task.isCancelled else { return }
-      timeoutDidFire()
+      
+      self?.timeoutDidFire()
     }
   }
 
