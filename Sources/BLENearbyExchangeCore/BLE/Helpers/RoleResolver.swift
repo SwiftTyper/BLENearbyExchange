@@ -5,36 +5,36 @@ import Foundation
 /// they can never disagree without exchanging a single extra message.
 struct RoleResolver {
   init(
-    makeNonce: @escaping () -> UInt64 = { RoleResolver.makeNonce() },
+    makeNonce: @escaping @Sendable () -> UInt32 = { RoleResolver.makeNonceImpl() },
   ) {
     self.makeNonce = makeNonce
   }
 
-  let makeNonce: () -> UInt64
+  let makeNonce: @Sendable () -> UInt32
 }
 
 extension RoleResolver {
-  static func resolve(myNonce: UInt64, peerNonce: UInt64) -> ConnectionRole? {
+  static func resolve<T: FixedWidthInteger>(myNonce: T, peerNonce: T) -> ConnectionRole? {
     if myNonce == peerNonce {
       return nil
     }
     return myNonce > peerNonce ? .central : .peripheral
   }
 
-  private static func makeNonce() -> UInt64 {
-    UInt64.random(in: .min ... .max)
+  private static func makeNonceImpl() -> UInt32 {
+    UInt32.random(in: .min ... .max)
   }
 
-  static func encode(_ nonce: UInt64) -> Data {
+  static func encode(_ nonce: some FixedWidthInteger) -> Data {
     withUnsafeBytes(of: nonce.bigEndian) { Data($0) }
   }
 
-  static func decode(_ data: Data) -> UInt64? {
-    guard data.count >= MemoryLayout<UInt64>.size
+  static func decode(_ data: Data) -> UInt32? {
+    guard data.count >= MemoryLayout<UInt32>.size
     else { return nil }
 
     return data
-      .prefix(MemoryLayout<UInt64>.size)
-      .reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+      .prefix(MemoryLayout<UInt32>.size)
+      .reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
   }
 }

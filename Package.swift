@@ -15,6 +15,10 @@ let package = Package(
       url: "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
       branch: "feature/peripheral-manager-support",
     ),
+    .package(
+      url: "https://github.com/pointfreeco/swift-clocks",
+      from: "1.1.1"
+    )
   ],
   targets: [
     .target(
@@ -39,6 +43,8 @@ let package = Package(
       name: "BLENearbyExchangeCoreTests",
       dependencies: [
         "BLENearbyExchangeCore",
+        .product(name: "CoreBluetoothMock", package: "iOS-CoreBluetooth-Mock"),
+        .product(name: "Clocks", package: "swift-clocks")
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

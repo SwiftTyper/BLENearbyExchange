@@ -11,29 +11,43 @@ public final class ExchangeSession: TimeoutController {
   private let configuration: NearbyExchange.Configuration
   private let roleResolver: RoleResolver
   private var ranger: ProximityRanger?
-  private var peripheral: BLEPeripheralManager?
-  private var central: BLECentralManager?
+  private var peripheral: BLEPeripheralInterface?
+  private var central: BLECentralInterface?
 
-  public private(set) var isRunning = false
-  private var role: ConnectionRole?
   private var payload = Data()
+  private var sent = TransferProgress()
+  private var received = TransferProgress()
+  private var role: ConnectionRole?
+  
   private var didPeerReceive = false
   private var didReceive = false
   private var didComplete = false
-  private var didFail = false
   private var distanceAquired = false
-  private var sent = TransferProgress()
-  private var received = TransferProgress()
-  private var progress: Double = 0
 
   public convenience init(
     configuration: NearbyExchange.Configuration,
   ) {
+    let ranger = ProximityRanger()
+    
+    let peripheral = BLEPeripheralManager(
+      configuration: configuration,
+      ranger: ranger,
+      forceMock: false,
+    )
+    
+    let central = BLECentralManager(
+      configuration: configuration,
+      ranger: ranger,
+      forceMock: false
+    )
+    
     self.init(
       configuration: configuration,
-      ranger: ProximityRanger(),
+      ranger: ranger,
       roleResolver: RoleResolver(),
-      forceMock: false,
+      central: central,
+      peripheral: peripheral,
+      clock: .continuous
     )
   }
 
@@ -41,32 +55,23 @@ public final class ExchangeSession: TimeoutController {
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
     roleResolver: RoleResolver,
-    forceMock: Bool,
+    central: any BLECentralInterface,
+    peripheral: any BLEPeripheralInterface,
+    clock: any Clock<Duration>
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
-
-    super.init()
-
     self.ranger = ranger
-
-    peripheral = .init(
-      configuration: configuration,
-      ranger: ranger,
-      forceMock: forceMock,
-    )
-
-    central = .init(
-      configuration: configuration,
-      ranger: ranger,
-      forceMock: forceMock,
-    )
-
-    peripheral?.onStateChange = { [weak self] in
+    self.peripheral = peripheral
+    self.central = central
+    
+    super.init(clock: clock)
+    
+    self.peripheral?.onStateChange = { [weak self] in
       self?.peripheralState.send($0)
     }
-
-    central?.onStateChange = { [weak self] in
+    
+    self.central?.onStateChange = { [weak self] in
       self?.centralState.send($0)
     }
   }
@@ -79,11 +84,10 @@ public final class ExchangeSession: TimeoutController {
     try await waitForPoweredOn(centralState)
 
     didComplete = false
-    didFail = false
+    
     self.payload = payload
+    
     try await beginHandshake()
-
-    isRunning = true
   }
 
   private func beginHandshake() async throws {
@@ -110,10 +114,10 @@ public final class ExchangeSession: TimeoutController {
   }
 
   private func fail(_ error: ExchangeError) {
-    guard !didFail, !didComplete
+    guard !didComplete
     else { return }
 
-    didFail = true
+    didComplete = true
 
     cancelTimer()
     ranger?.stop()
@@ -155,6 +159,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func terminate(_ control: GATT.Control) async {
+    //TODO:
     switch role {
     case .central:
       await withCheckedContinuation { continuation in
@@ -174,10 +179,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func stop() {
-    ranger?.onDistance = nil
-    ranger?.onError = nil
     ranger?.stop()
-
     peripheral?.stop()
     central?.stop()
 
@@ -186,12 +188,9 @@ public final class ExchangeSession: TimeoutController {
     didPeerReceive = false
     didReceive = false
     didComplete = false
-    didFail = false
     distanceAquired = false
     sent = TransferProgress()
     received = TransferProgress()
-    progress = 0
-    isRunning = false
   }
 
   private func wireCallbacks() {
@@ -289,7 +288,7 @@ public final class ExchangeSession: TimeoutController {
     guard total > 0 else { return }
 
     let value = Double(sent.bytes + received.bytes) / Double(total)
-    progress = max(progress, min(1, value))
+    let progress = max(0, min(1, value))
 
     events.send(.progress(progress))
   }
@@ -318,7 +317,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   private func checkDone() {
-    guard didPeerReceive, didReceive, !didFail else { return }
+    guard didPeerReceive, didReceive, !didComplete else { return }
     didComplete = true
     ranger?.stop()
     events.send(.completed)

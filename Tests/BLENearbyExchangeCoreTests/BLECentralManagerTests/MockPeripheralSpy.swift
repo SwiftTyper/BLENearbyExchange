@@ -18,7 +18,7 @@ final class MockPeripheralSpy: @unchecked Sendable {
 
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
-    nonce: UInt64,
+    nonce: UInt32,
     mtu: Int = 64,
   ) {
     let name = RoleResolver.encode(nonce).base64EncodedString()
