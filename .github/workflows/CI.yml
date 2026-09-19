@@ -7,7 +7,19 @@ on:
     branches: [ "main" ]
 
 jobs:
+  format:
+    runs-on: xcode-27
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install SwiftFormat
+      run: brew install swiftformat
+
+    - name: Lint
+      run: swiftformat --lint --reporter github-actions-log .
+
   build-and-test:
+    needs: format
     runs-on: xcode-27
     steps:
     - uses: actions/checkout@v4
@@ -24,13 +36,3 @@ jobs:
           -scheme BLENearbyExchange \
           -destination 'platform=macOS' \
           -skipPackagePluginValidation
-  format:
-    runs-on: xcode-27
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install SwiftFormat
-      run: brew install swiftformat
-
-    - name: Lint
-      run: swiftformat --lint --reporter github-actions-log .
