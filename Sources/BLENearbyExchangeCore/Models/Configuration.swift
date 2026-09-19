@@ -5,12 +5,12 @@ public enum NearbyExchange {
   public struct Configuration: Sendable {
     public var serviceUUID: UUID
     public var distanceThreshold: Float
-    public var timeout: TimeInterval
+    public var timeout: Int
 
     public init(
       serviceUUID: UUID = Configuration.defaultServiceUUID,
       distanceThreshold: Float = 0.15,
-      timeout: TimeInterval = 60,
+      timeout: Int = 60,
     ) {
       self.serviceUUID = serviceUUID
       self.distanceThreshold = distanceThreshold

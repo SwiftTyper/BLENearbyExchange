@@ -1,5 +1,5 @@
 {
-  "originHash" : "04d20510fa4e16d4823066b6755e017cef3ca110199d61d933b77f75b8dc5b1f",
+  "originHash" : "a638bb018945900ee751db61f0332a295d05858277435ff0375cac19337712e3",
   "pins" : [
     {
       "identity" : "ios-corebluetooth-mock",
@@ -8,6 +8,33 @@
       "state" : {
         "branch" : "feature/peripheral-manager-support",
         "revision" : "7d34f318596d3c1209195fb5ecd2d6fce505b719"
+      }
+    },
+    {
+      "identity" : "swift-clocks",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-clocks",
+      "state" : {
+        "revision" : "82440fa0a8b1c381a6d1e8e0fc7bbba53ec63204",
+        "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-concurrency-extras",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
+      "state" : {
+        "revision" : "5fa253428866f2360c3754e88537f700ed2656b5",
+        "version" : "1.4.1"
+      }
+    },
+    {
+      "identity" : "swift-issue-reporting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
+      "state" : {
+        "revision" : "71c7c9a761d1ca6ed4ccb6ced040fe1c1a39e8e7",
+        "version" : "2.1.0"
       }
     }
   ],

@@ -302,6 +302,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
 extension BLEPeripheralManagerTests {
   private func makeSUT(
     ranger: ProximityRanger = MockRanger(),
+    file: StaticString = #filePath,
+    line: UInt = #line,
   ) async -> BLEPeripheralManager {
     CBMCentralManagerMock.tearDownSimulation()
     CBMCentralManagerMock.simulateInitialState(.poweredOn)
@@ -311,6 +313,8 @@ extension BLEPeripheralManagerTests {
       ranger: ranger,
       forceMock: true,
     )
+
+    trackForMemoryLeaks(instance: peripheral, file: file, line: line)
 
     let poweredOn = expectation(description: "the manager powered on")
 

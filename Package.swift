@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
   name: "BLENearbyExchange",
   platforms: [
-    .iOS(.v17),
+    .iOS(.v18),
     .macOS(.v15),
   ],
   products: [
@@ -14,6 +14,10 @@ let package = Package(
     .package(
       url: "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
       branch: "feature/peripheral-manager-support",
+    ),
+    .package(
+      url: "https://github.com/pointfreeco/swift-clocks",
+      from: "1.1.1",
     ),
   ],
   targets: [
@@ -39,6 +43,8 @@ let package = Package(
       name: "BLENearbyExchangeCoreTests",
       dependencies: [
         "BLENearbyExchangeCore",
+        .product(name: "CoreBluetoothMock", package: "iOS-CoreBluetooth-Mock"),
+        .product(name: "Clocks", package: "swift-clocks"),
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

@@ -3,10 +3,10 @@ import CoreBluetoothMock
 import Foundation
 
 @BLEActor
-final class BLECentralManager: NSObject {
+final class BLECentralManager: NSObject, BLECentralInterface {
   private let configuration: NearbyExchange.Configuration
 
-  private var nonce: UInt64?
+  private var nonce: UInt32?
   private var manager: CBMCentralManager!
   private var ranger: ProximityRanger
 
@@ -47,7 +47,7 @@ final class BLECentralManager: NSObject {
     )
   }
 
-  func startScanning(nonce: UInt64) {
+  func startScanning(nonce: UInt32) {
     self.nonce = nonce
 
     manager.scanForPeripherals(
@@ -149,6 +149,7 @@ final class BLECentralManager: NSObject {
     }
   }
 
+  /// TODO:
   func confirmSent() {
     sentBytes = payloadBytes
     onSendProgress?(sendProgress)

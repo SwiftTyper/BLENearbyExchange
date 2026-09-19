@@ -2,7 +2,7 @@ import CoreBluetoothMock
 import Foundation
 
 @BLEActor
-final class BLEPeripheralManager: NSObject {
+final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private let configuration: NearbyExchange.Configuration
 
   private var manager: CBMPeripheralManager!
@@ -50,7 +50,7 @@ final class BLEPeripheralManager: NSObject {
     )
   }
 
-  func startAdvertising(nonce: UInt64) async throws {
+  func startAdvertising(nonce: UInt32) async throws {
     manager.removeAllServices()
 
     handshakeChar = CBMMutableCharacteristic(
@@ -132,6 +132,7 @@ final class BLEPeripheralManager: NSObject {
     payloadChar = nil
     controlChar = nil
     subscribedCentral = nil
+    centralSubscribedCharacteristics = []
 
     transferQueue.clear()
     terminationCompletion = nil
