@@ -9,9 +9,9 @@ import Clocks
 @BLEActor
 final class ExchangeSessionTests: XCTestCase {
   func test_nonceCollisionRestartsTheHandshakeWithAFreshNonce() async throws {
-    let peerNonce: UInt64 = 1
-    let collidingLocalNonce: UInt64 = 1
-    let freshLocalNonce: UInt64 = 2
+    let peerNonce: UInt32 = 1
+    let collidingLocalNonce: UInt32 = 1
+    let freshLocalNonce: UInt32 = 2
     
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce, freshLocalNonce],
@@ -65,8 +65,8 @@ final class ExchangeSessionTests: XCTestCase {
   }
   
   func test_unresolvedNonceCollisionKeepsRestartingTheHandshake() async throws {
-    let peerNonce: UInt64 = 1
-    let collidingLocalNonce: UInt64 = 1
+    let peerNonce: UInt32 = 1
+    let collidingLocalNonce: UInt32 = 1
     
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce],
@@ -108,8 +108,8 @@ final class ExchangeSessionTests: XCTestCase {
   }
   
   func test_distinctNoncesSucessfullyResolveARole() async throws {
-    let peerNonce: UInt64 = 1
-    let localNonce: UInt64 = 2
+    let peerNonce: UInt32 = 1
+    let localNonce: UInt32 = 2
     
     let (session, central, peripheral) = makeSUT(
       localNonces: [localNonce],
@@ -175,7 +175,7 @@ extension ExchangeSessionTests {
   }
   
   func test_cancelsTimer_afterConnectingWithPeer() async throws {
-    let localNonce: UInt64 = 2
+    let localNonce: UInt32 = 2
     
     let clock = TestClock()
     let (session, central, _) = makeSUT(localNonces: [localNonce], clock: clock)
@@ -309,8 +309,8 @@ extension ExchangeSessionTests {
     mockedDistance: Float,
     payload: Data
   ) async throws -> (BLECentralSpy, BLEPeripheralSpy) {
-    let localNonce: UInt64 = localDeviceType == .central ? 2 : 1
-    let peerNonce: UInt64 = localDeviceType == .central ? 1 : 2
+    let localNonce: UInt32 = localDeviceType == .central ? 2 : 1
+    let peerNonce: UInt32 = localDeviceType == .central ? 1 : 2
     
     let ranger = MockRanger()
     
@@ -401,8 +401,8 @@ extension ExchangeSessionTests {
   
 extension ExchangeSessionTests {
   func test_dataExchange_happyPath() async throws {
-    let localNonce: UInt64 = 2
-    let peerNonce: UInt64 = 1
+    let localNonce: UInt32 = 2
+    let peerNonce: UInt32 = 1
     let localPayload = Data(Array(repeating: UInt8(ascii: "L"), count: 10))
     let peerPayload = Data(Array(repeating: UInt8(ascii: "P"), count: 10))
     let distance: Float = 0.1
@@ -485,7 +485,7 @@ extension ExchangeSessionTests {
 
 extension ExchangeSessionTests {
   private func makeSUT(
-    localNonces: [UInt64] = [1],
+    localNonces: [UInt32] = [1],
     ranger: MockRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
@@ -501,7 +501,7 @@ extension ExchangeSessionTests {
       ranger: ranger,
       roleResolver: RoleResolver(
         makeNonce: {
-          remaining.withLock { values -> UInt64 in
+          remaining.withLock { values -> UInt32 in
             guard values.count > 1 else { return values.first ?? 0 }
             return values.removeFirst()
           }
@@ -523,7 +523,7 @@ extension ExchangeSessionTests {
   }
 
   private func simulatePeerDiscovery(
-    advertising peerNonce: UInt64,
+    advertising peerNonce: UInt32,
     on central: BLECentralSpy,
     file: StaticString = #filePath,
     line: UInt = #line,

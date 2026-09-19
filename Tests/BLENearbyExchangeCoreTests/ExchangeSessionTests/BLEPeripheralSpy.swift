@@ -5,7 +5,7 @@ import Foundation
 @BLEActor
 final class BLEPeripheralSpy: BLEPeripheralInterface {
   enum Call: Equatable {
-    case startAdvertising(nonce: UInt64)
+    case startAdvertising(nonce: UInt32)
     case send(payload: Data)
     case confirmSent
     case sendTerminate(GATT.Control)
@@ -23,7 +23,7 @@ final class BLEPeripheralSpy: BLEPeripheralInterface {
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
 
-  func startAdvertising(nonce: UInt64) async throws {
+  func startAdvertising(nonce: UInt32) async throws {
     calls.append(.startAdvertising(nonce: nonce))
   }
 

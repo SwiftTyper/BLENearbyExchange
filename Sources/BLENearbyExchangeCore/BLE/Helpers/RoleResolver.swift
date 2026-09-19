@@ -14,7 +14,7 @@ struct RoleResolver {
 }
 
 extension RoleResolver {
-  static func resolve(myNonce: UInt32, peerNonce: UInt32) -> ConnectionRole? {
+  static func resolve<T: FixedWidthInteger>(myNonce: T, peerNonce: T) -> ConnectionRole? {
     if myNonce == peerNonce {
       return nil
     }
@@ -25,7 +25,7 @@ extension RoleResolver {
     UInt32.random(in: .min ... .max)
   }
 
-  static func encode(_ nonce: UInt32) -> Data {
+  static func encode(_ nonce: some FixedWidthInteger) -> Data {
     withUnsafeBytes(of: nonce.bigEndian) { Data($0) }
   }
 
@@ -34,7 +34,7 @@ extension RoleResolver {
     else { return nil }
 
     return data
-      .prefix(MemoryLayout<UInt64>.size)
+      .prefix(MemoryLayout<UInt32>.size)
       .reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
   }
 }

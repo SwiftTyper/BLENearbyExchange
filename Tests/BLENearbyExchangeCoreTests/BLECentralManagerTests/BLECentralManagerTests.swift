@@ -378,7 +378,7 @@ extension BLECentralManagerTests {
 
   private func connect(
     _ central: BLECentralManager,
-    nonce: UInt64,
+    nonce: UInt32,
     file: StaticString = #filePath,
     line: UInt = #line,
   ) async {

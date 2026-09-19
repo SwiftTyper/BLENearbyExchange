@@ -23,7 +23,6 @@ final class NearbyExchangePresenter {
   private var eventsTask: Task<Void, Never>?
   private var startTask: Task<Void, Never>?
   private var received: Data?
-  private var smoothedDistance: Float?
 
   init(configuration: NearbyExchange.Configuration) {
     self.configuration = configuration
@@ -37,17 +36,14 @@ final class NearbyExchangePresenter {
       session = await ExchangeSession(configuration: configuration)
       self.session = session
     }
-
-    guard continuation == nil, await !session.isRunning
-    else { throw NearbyExchangeAction.Failure.busy }
-
+    
+    guard !isPresented else { throw NearbyExchangeAction.Failure.busy }
+    
+    isPresented = true
     received = nil
-    smoothedDistance = nil
     phase = .searching
 
     let events = await session.events.receive()
-
-    isPresented = true
 
     return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in

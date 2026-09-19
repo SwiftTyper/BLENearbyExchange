@@ -2,7 +2,7 @@ import Foundation
 
 @BLEActor
 public class TimeoutController {
-  private var clock: any Clock<Duration>
+  private let clock: any Clock<Duration>
   private var task: Task<Void, Never>?
 
   nonisolated init(

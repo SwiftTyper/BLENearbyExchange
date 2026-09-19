@@ -13,7 +13,13 @@
     "testTimeoutsEnabled" : true
   },
   "testTargets" : [
-
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "BLENearbyExchangeCoreTests",
+        "name" : "BLENearbyExchangeCoreTests"
+      }
+    }
   ],
   "version" : 1
 }
