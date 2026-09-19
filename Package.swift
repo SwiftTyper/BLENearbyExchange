@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
   name: "BLENearbyExchange",
   platforms: [
-    .iOS(.v17),
+    .iOS(.v18),
     .macOS(.v15),
   ],
   products: [
