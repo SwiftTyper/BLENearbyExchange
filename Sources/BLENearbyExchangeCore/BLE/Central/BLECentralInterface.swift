@@ -1,5 +1,5 @@
-import Foundation
 import CoreBluetoothMock
+import Foundation
 
 @BLEActor
 protocol BLECentralInterface {

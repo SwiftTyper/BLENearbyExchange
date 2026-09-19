@@ -17,8 +17,8 @@ let package = Package(
     ),
     .package(
       url: "https://github.com/pointfreeco/swift-clocks",
-      from: "1.1.1"
-    )
+      from: "1.1.1",
+    ),
   ],
   targets: [
     .target(
@@ -44,7 +44,7 @@ let package = Package(
       dependencies: [
         "BLENearbyExchangeCore",
         .product(name: "CoreBluetoothMock", package: "iOS-CoreBluetooth-Mock"),
-        .product(name: "Clocks", package: "swift-clocks")
+        .product(name: "Clocks", package: "swift-clocks"),
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),

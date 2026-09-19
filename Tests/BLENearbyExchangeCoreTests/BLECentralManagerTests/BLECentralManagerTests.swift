@@ -349,7 +349,7 @@ extension BLECentralManagerTests {
     peer: MockPeripheralSpy,
     ranger: MockRanger = MockRanger(),
     file: StaticString = #filePath,
-    line: UInt = #line
+    line: UInt = #line,
   ) async -> BLECentralManager {
     CBMCentralManagerMock.tearDownSimulation()
     CBMCentralManagerMock.simulateRSSIDeviation(.none)
@@ -361,9 +361,9 @@ extension BLECentralManagerTests {
       ranger: ranger,
       forceMock: true,
     )
-    
+
     trackForMemoryLeaks(instance: central, file: file, line: line)
-    
+
     let poweredOn = expectation(description: "the manager powered on")
 
     central.onStateChange = { state in

@@ -18,7 +18,7 @@ public final class ExchangeSession: TimeoutController {
   private var sent = TransferProgress()
   private var received = TransferProgress()
   private var role: ConnectionRole?
-  
+
   private var didPeerReceive = false
   private var didReceive = false
   private var didComplete = false
@@ -28,26 +28,26 @@ public final class ExchangeSession: TimeoutController {
     configuration: NearbyExchange.Configuration,
   ) {
     let ranger = ProximityRanger()
-    
+
     let peripheral = BLEPeripheralManager(
       configuration: configuration,
       ranger: ranger,
       forceMock: false,
     )
-    
+
     let central = BLECentralManager(
       configuration: configuration,
       ranger: ranger,
-      forceMock: false
+      forceMock: false,
     )
-    
+
     self.init(
       configuration: configuration,
       ranger: ranger,
       roleResolver: RoleResolver(),
       central: central,
       peripheral: peripheral,
-      clock: .continuous
+      clock: .continuous,
     )
   }
 
@@ -57,20 +57,20 @@ public final class ExchangeSession: TimeoutController {
     roleResolver: RoleResolver,
     central: any BLECentralInterface,
     peripheral: any BLEPeripheralInterface,
-    clock: any Clock<Duration>
+    clock: any Clock<Duration>,
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
     self.ranger = ranger
     self.peripheral = peripheral
     self.central = central
-    
+
     super.init(clock: clock)
-    
+
     self.peripheral?.onStateChange = { [weak self] in
       self?.peripheralState.send($0)
     }
-    
+
     self.central?.onStateChange = { [weak self] in
       self?.centralState.send($0)
     }
@@ -84,9 +84,9 @@ public final class ExchangeSession: TimeoutController {
     try await waitForPoweredOn(centralState)
 
     didComplete = false
-    
+
     self.payload = payload
-    
+
     try await beginHandshake()
   }
 
@@ -159,7 +159,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func terminate(_ control: GATT.Control) async {
-    //TODO:
+    // TODO:
     switch role {
     case .central:
       await withCheckedContinuation { continuation in

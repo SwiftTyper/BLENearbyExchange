@@ -52,7 +52,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
     manager.scanForPeripherals(
       withServices: [configuration.serviceUUID.cbuuid],
-      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true], /// TODO:
+      options: [CBCentralManagerScanOptionAllowDuplicatesKey: true], // TODO:
     )
   }
 
@@ -149,7 +149,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     }
   }
 
-  /// TODO
+  /// TODO:
   func confirmSent() {
     sentBytes = payloadBytes
     onSendProgress?(sendProgress)

@@ -36,9 +36,9 @@ final class NearbyExchangePresenter {
       session = await ExchangeSession(configuration: configuration)
       self.session = session
     }
-    
+
     guard !isPresented else { throw NearbyExchangeAction.Failure.busy }
-    
+
     isPresented = true
     received = nil
     phase = .searching

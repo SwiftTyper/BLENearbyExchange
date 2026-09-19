@@ -1,10 +1,10 @@
 @testable import BLENearbyExchangeCore
+import Clocks
 import CoreBluetooth
 import CoreBluetoothMock
 import Foundation
 import Synchronization
 import XCTest
-import Clocks
 
 @BLEActor
 final class ExchangeSessionTests: XCTestCase {
@@ -12,19 +12,19 @@ final class ExchangeSessionTests: XCTestCase {
     let peerNonce: UInt32 = 1
     let collidingLocalNonce: UInt32 = 1
     let freshLocalNonce: UInt32 = 2
-    
+
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce, freshLocalNonce],
     )
-    
+
     let restarted = expectation(description: "the handshake restarted")
     central.onStartScanning = { nonce in
       guard nonce == freshLocalNonce else { return }
       restarted.fulfill()
     }
-    
+
     let connected = expectation(description: "the peer connected")
-    
+
     let events = session.events.receive()
     let observer = Task {
       for await event in events {
@@ -33,18 +33,18 @@ final class ExchangeSessionTests: XCTestCase {
       }
     }
     defer { observer.cancel() }
-    
+
     try await session.start(payload: Data())
-    
+
     simulatePeerDiscovery(advertising: peerNonce, on: central)
-    
+
     await fulfillment(of: [restarted], timeout: 1)
-    
+
     simulatePeerDiscovery(advertising: peerNonce, on: central)
     central.onConnected?()
-    
+
     await fulfillment(of: [connected], timeout: 1)
-    
+
     XCTAssertEqual(
       central.calls,
       [
@@ -63,28 +63,28 @@ final class ExchangeSessionTests: XCTestCase {
       ],
     )
   }
-  
+
   func test_unresolvedNonceCollisionKeepsRestartingTheHandshake() async throws {
     let peerNonce: UInt32 = 1
     let collidingLocalNonce: UInt32 = 1
-    
+
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce],
     )
-    
+
     try await session.start(payload: Data())
-    
+
     for _ in 0 ..< 2 {
       let restarted = expectation(description: "the handshake restarted")
       central.onStartScanning = { _ in
         restarted.fulfill()
       }
-      
+
       simulatePeerDiscovery(advertising: peerNonce, on: central)
-      
+
       await fulfillment(of: [restarted], timeout: 1)
     }
-    
+
     XCTAssertEqual(
       central.calls,
       [
@@ -106,17 +106,17 @@ final class ExchangeSessionTests: XCTestCase {
       ],
     )
   }
-  
+
   func test_distinctNoncesSucessfullyResolveARole() async throws {
     let peerNonce: UInt32 = 1
     let localNonce: UInt32 = 2
-    
+
     let (session, central, peripheral) = makeSUT(
       localNonces: [localNonce],
     )
-    
+
     let connected = expectation(description: "the peer connected")
-    
+
     let events = session.events.receive()
     let observer = Task {
       for await event in events {
@@ -125,14 +125,14 @@ final class ExchangeSessionTests: XCTestCase {
       }
     }
     defer { observer.cancel() }
-    
+
     try await session.start(payload: Data())
-    
+
     simulatePeerDiscovery(advertising: peerNonce, on: central)
     central.onConnected?()
-    
+
     await fulfillment(of: [connected], timeout: 1)
-    
+
     XCTAssertEqual(
       central.calls,
       [
@@ -153,38 +153,38 @@ extension ExchangeSessionTests {
   func test_timesOut_whenItDoesntConnectWithPeerInTime() async throws {
     let clock = TestClock()
     let (session, _, _) = makeSUT(clock: clock)
-    
+
     try await session.start(payload: Data())
-    
+
     let timeoutEvent = expectation(description: "session did timeout")
-    
+
     let events = session.events.receive()
-    
+
     let observer = Task {
       for await event in events {
         XCTAssertEqual(event, .failed(.timedOut))
         timeoutEvent.fulfill()
       }
     }
-    
+
     defer { observer.cancel() }
-    
+
     await clock.advance(by: .seconds(60))
-    
+
     await fulfillment(of: [timeoutEvent], timeout: 1.0)
   }
-  
+
   func test_cancelsTimer_afterConnectingWithPeer() async throws {
     let localNonce: UInt32 = 2
-    
+
     let clock = TestClock()
     let (session, central, _) = makeSUT(localNonces: [localNonce], clock: clock)
-    
+
     let sessionNeverTimesOut = expectation(description: "session doesn't timeout")
     sessionNeverTimesOut.isInverted = true
-    
+
     let events = session.events.receive()
-    
+
     let observer = Task {
       for await event in events {
         switch event {
@@ -193,15 +193,15 @@ extension ExchangeSessionTests {
         }
       }
     }
-    
+
     defer { observer.cancel() }
-    
+
     try await session.start(payload: Data())
-    
+
     central.onConnected?()
-    
+
     await clock.advance(by: .seconds(60))
-    
+
     await fulfillment(of: [sessionNeverTimesOut], timeout: 0.2)
   }
 }
@@ -209,119 +209,119 @@ extension ExchangeSessionTests {
 extension ExchangeSessionTests {
   func test_desiredRangeNotReached_centralSide_doesntSendPayload() async throws {
     let payload = Data("payload".utf8)
-    
+
     let (central, _) = try await rangeTestSetup(
       localDeviceType: .central,
       distanceThreshold: 0.5,
       mockedDistance: 1.5,
-      payload: payload
+      payload: payload,
     )
-    
+
     XCTAssertFalse(
       central.calls.contains(.send(payload: payload)),
       "The central sent the payload out of range.",
     )
   }
-  
+
   func test_desiredRangeNotReached_peripheralSide_doesntSendPayload() async throws {
     let payload = Data("payload".utf8)
-    
+
     let (_, peripheral) = try await rangeTestSetup(
       localDeviceType: .peripheral,
       distanceThreshold: 0.5,
       mockedDistance: 1.5,
-      payload: payload
+      payload: payload,
     )
-    
+
     XCTAssertFalse(
       peripheral.calls.contains(.send(payload: payload)),
       "The peripheral sent the payload out of range.",
     )
   }
-  
+
   func test_reachesDesiredRange_centralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
-    
+
     let (central, _) = try await rangeTestSetup(
       localDeviceType: .central,
       distanceThreshold: 0.5,
       mockedDistance: 0.5,
-      payload: payload
+      payload: payload,
     )
-    
+
     XCTAssertTrue(
       central.calls.contains(.send(payload: payload)),
       "The central didn't send the payload when in range.",
     )
   }
-  
+
   func test_reachesDesiredRange_peripheralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
-    
+
     let (_, peripheral) = try await rangeTestSetup(
       localDeviceType: .peripheral,
       distanceThreshold: 0.5,
       mockedDistance: 0.5,
-      payload: payload
+      payload: payload,
     )
-    
+
     XCTAssertTrue(
       peripheral.calls.contains(.send(payload: payload)),
       "The peripheral didn't send the payload when in range.",
     )
   }
-  
+
   func test_belowDesiredRange_centralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
-    
+
     let (central, _) = try await rangeTestSetup(
       localDeviceType: .central,
       distanceThreshold: 0.5,
       mockedDistance: 0.4,
-      payload: payload
+      payload: payload,
     )
-    
+
     XCTAssertTrue(
       central.calls.contains(.send(payload: payload)),
       "The central didn't send the payload when in range.",
     )
   }
-  
+
   func test_belowDesiredRange_peripheralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
-    
+
     let (_, peripheral) = try await rangeTestSetup(
       localDeviceType: .peripheral,
       distanceThreshold: 0.5,
       mockedDistance: 0.4,
-      payload: payload
+      payload: payload,
     )
-    
+
     XCTAssertTrue(
       peripheral.calls.contains(.send(payload: payload)),
       "The peripheral didn't send the payload when in range.",
     )
   }
-  
+
   private func rangeTestSetup(
     localDeviceType: ConnectionRole,
     distanceThreshold: Float,
     mockedDistance: Float,
-    payload: Data
+    payload: Data,
   ) async throws -> (BLECentralSpy, BLEPeripheralSpy) {
     let localNonce: UInt32 = localDeviceType == .central ? 2 : 1
     let peerNonce: UInt32 = localDeviceType == .central ? 1 : 2
-    
+
     let ranger = MockRanger()
-    
+
     let (session, central, peripheral) = makeSUT(
       localNonces: [localNonce],
       ranger: ranger,
-      configuration: .init(distanceThreshold: distanceThreshold)
+      configuration: .init(distanceThreshold: distanceThreshold),
     )
-    
+
     let ranged = expectation(description: "the session observed the distance")
-    
+
     let events = session.events.receive()
     let observer = Task {
       for await event in events {
@@ -331,27 +331,27 @@ extension ExchangeSessionTests {
       }
     }
     defer { observer.cancel() }
-    
+
     try await session.start(payload: payload)
-    
+
     simulatePeerDiscovery(advertising: peerNonce, on: central)
     central.onConnected?()
-    
+
     ranger.onDistance?(mockedDistance)
-    
+
     await fulfillment(of: [ranged], timeout: 1)
-    
+
     return (central, peripheral)
   }
 }
-  
+
 extension ExchangeSessionTests {
   func test_centralReceivesError_propagesError() async throws {
     let (session, central, _) = makeSUT()
-    
+
     let errorReceived = expectation(description: "expected errors received")
     let mockError: ExchangeError = .incompatiblePeer
-    
+
     let observer = Task {
       for await event in session.events.receive() {
         switch event {
@@ -362,22 +362,22 @@ extension ExchangeSessionTests {
         }
       }
     }
-    
+
     defer { observer.cancel() }
-    
+
     try await session.start(payload: .init())
-    
+
     central.onError?(mockError)
-    
+
     await fulfillment(of: [errorReceived], timeout: 1)
   }
-  
+
   func test_peripheralReceivesError_propagesError() async throws {
     let (session, _, peripheral) = makeSUT()
-    
+
     let errorReceived = expectation(description: "expected errors received")
     let mockError: ExchangeError = .incompatiblePeer
-    
+
     let observer = Task {
       for await event in session.events.receive() {
         switch event {
@@ -388,17 +388,17 @@ extension ExchangeSessionTests {
         }
       }
     }
-    
+
     defer { observer.cancel() }
-    
+
     try await session.start(payload: .init())
-    
+
     peripheral.onError?(mockError)
-    
+
     await fulfillment(of: [errorReceived], timeout: 1)
   }
 }
-  
+
 extension ExchangeSessionTests {
   func test_dataExchange_happyPath() async throws {
     let localNonce: UInt32 = 2
@@ -490,7 +490,7 @@ extension ExchangeSessionTests {
     file: StaticString = #filePath,
     line: UInt = #line,
     clock: any Clock<Duration> = .continuous,
-    configuration: NearbyExchange.Configuration = .init()
+    configuration: NearbyExchange.Configuration = .init(),
   ) -> (session: ExchangeSession, central: BLECentralSpy, peripheral: BLEPeripheralSpy) {
     let central = BLECentralSpy()
     let peripheral = BLEPeripheralSpy()
@@ -509,7 +509,7 @@ extension ExchangeSessionTests {
       ),
       central: central,
       peripheral: peripheral,
-      clock: clock
+      clock: clock,
     )
 
     central.onStateChange?(.poweredOn)
