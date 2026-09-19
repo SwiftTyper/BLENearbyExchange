@@ -207,14 +207,150 @@ extension ExchangeSessionTests {
 }
 
 extension ExchangeSessionTests {
-  func test_desiredRangeNotReached_doesntSendPayload() async throws {
+  func test_desiredRangeNotReached_centralSide_doesntSendPayload() async throws {
+    let payload = Data("payload".utf8)
     
+    let (central, _) = try await rangeTestSetup(
+      localDeviceType: .central,
+      distanceThreshold: 0.5,
+      mockedDistance: 1.5,
+      payload: payload
+    )
+    
+    XCTAssertFalse(
+      central.calls.contains(.send(payload: payload)),
+      "The central sent the payload out of range.",
+    )
   }
   
-  func test_reachesDesiredRanger_sendsPayload() async throws {
+  func test_desiredRangeNotReached_peripheralSide_doesntSendPayload() async throws {
+    let payload = Data("payload".utf8)
     
+    let (_, peripheral) = try await rangeTestSetup(
+      localDeviceType: .peripheral,
+      distanceThreshold: 0.5,
+      mockedDistance: 1.5,
+      payload: payload
+    )
+    
+    XCTAssertFalse(
+      peripheral.calls.contains(.send(payload: payload)),
+      "The peripheral sent the payload out of range.",
+    )
   }
   
+  func test_reachesDesiredRange_centralSide_sendsPayload() async throws {
+    let payload = Data("payload".utf8)
+    
+    let (central, _) = try await rangeTestSetup(
+      localDeviceType: .central,
+      distanceThreshold: 0.5,
+      mockedDistance: 0.5,
+      payload: payload
+    )
+    
+    XCTAssertTrue(
+      central.calls.contains(.send(payload: payload)),
+      "The central didn't send the payload when in range.",
+    )
+  }
+  
+  func test_reachesDesiredRange_peripheralSide_sendsPayload() async throws {
+    let payload = Data("payload".utf8)
+    
+    let (_, peripheral) = try await rangeTestSetup(
+      localDeviceType: .peripheral,
+      distanceThreshold: 0.5,
+      mockedDistance: 0.5,
+      payload: payload
+    )
+    
+    XCTAssertTrue(
+      peripheral.calls.contains(.send(payload: payload)),
+      "The peripheral didn't send the payload when in range.",
+    )
+  }
+  
+  func test_belowDesiredRange_centralSide_sendsPayload() async throws {
+    let payload = Data("payload".utf8)
+    
+    let (central, _) = try await rangeTestSetup(
+      localDeviceType: .central,
+      distanceThreshold: 0.5,
+      mockedDistance: 0.4,
+      payload: payload
+    )
+    
+    XCTAssertTrue(
+      central.calls.contains(.send(payload: payload)),
+      "The central didn't send the payload when in range.",
+    )
+  }
+  
+  func test_belowDesiredRange_peripheralSide_sendsPayload() async throws {
+    let payload = Data("payload".utf8)
+    
+    let (_, peripheral) = try await rangeTestSetup(
+      localDeviceType: .peripheral,
+      distanceThreshold: 0.5,
+      mockedDistance: 0.4,
+      payload: payload
+    )
+    
+    XCTAssertTrue(
+      peripheral.calls.contains(.send(payload: payload)),
+      "The peripheral didn't send the payload when in range.",
+    )
+  }
+  
+  private enum Mode {
+    case peripheral
+    case central
+  }
+  
+  private func rangeTestSetup(
+    localDeviceType: Mode,
+    distanceThreshold: Float,
+    mockedDistance: Float,
+    payload: Data
+  ) async throws -> (BLECentralSpy, BLEPeripheralSpy) {
+    let localNonce: UInt64 = localDeviceType == .central ? 2 : 1
+    let peerNonce: UInt64 = localDeviceType == .central ? 1 : 2
+    
+    let ranger = MockRanger()
+    
+    let (session, central, peripheral) = makeSUT(
+      localNonces: [localNonce],
+      ranger: ranger,
+      configuration: .init(distanceThreshold: distanceThreshold)
+    )
+    
+    let ranged = expectation(description: "the session observed the distance")
+    
+    let events = session.events.receive()
+    let observer = Task {
+      for await event in events {
+        guard case let .distance(distance) = event else { continue }
+        XCTAssertEqual(distance, mockedDistance)
+        ranged.fulfill()
+      }
+    }
+    defer { observer.cancel() }
+    
+    try await session.start(payload: payload)
+    
+    simulatePeerDiscovery(advertising: peerNonce, on: central)
+    central.onConnected?()
+    
+    ranger.onDistance?(mockedDistance)
+    
+    await fulfillment(of: [ranged], timeout: 1)
+    
+    return (central, peripheral)
+  }
+}
+  
+extension ExchangeSessionTests {
   func test_receivesError_failsSessionAndPropagesError() async throws {
     
   }
@@ -230,14 +366,15 @@ extension ExchangeSessionTests {
     ranger: MockRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
-    clock: any Clock<Duration> = .continuous
+    clock: any Clock<Duration> = .continuous,
+    configuration: NearbyExchange.Configuration = .init()
   ) -> (session: ExchangeSession, central: BLECentralSpy, peripheral: BLEPeripheralSpy) {
     let central = BLECentralSpy()
     let peripheral = BLEPeripheralSpy()
     let remaining = Mutex(localNonces)
 
     let session = ExchangeSession(
-      configuration: .init(),
+      configuration: configuration,
       ranger: ranger,
       roleResolver: RoleResolver(
         makeNonce: {
