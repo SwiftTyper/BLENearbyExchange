@@ -303,13 +303,8 @@ extension ExchangeSessionTests {
     )
   }
   
-  private enum Mode {
-    case peripheral
-    case central
-  }
-  
   private func rangeTestSetup(
-    localDeviceType: Mode,
+    localDeviceType: ConnectionRole,
     distanceThreshold: Float,
     mockedDistance: Float,
     payload: Data
@@ -351,12 +346,140 @@ extension ExchangeSessionTests {
 }
   
 extension ExchangeSessionTests {
-  func test_receivesError_failsSessionAndPropagesError() async throws {
+  func test_centralReceivesError_propagesError() async throws {
+    let (session, central, _) = makeSUT()
     
+    let errorReceived = expectation(description: "expected errors received")
+    let mockError: ExchangeError = .incompatiblePeer
+    
+    let observer = Task {
+      for await event in session.events.receive() {
+        switch event {
+        case let .failed(error):
+          XCTAssertEqual(error, mockError)
+          errorReceived.fulfill()
+        default: break
+        }
+      }
+    }
+    
+    defer { observer.cancel() }
+    
+    try await session.start(payload: .init())
+    
+    central.onError?(mockError)
+    
+    await fulfillment(of: [errorReceived], timeout: 1)
   }
   
-  func test_successfullyExchangesData() async throws {
+  func test_peripheralReceivesError_propagesError() async throws {
+    let (session, _, peripheral) = makeSUT()
     
+    let errorReceived = expectation(description: "expected errors received")
+    let mockError: ExchangeError = .incompatiblePeer
+    
+    let observer = Task {
+      for await event in session.events.receive() {
+        switch event {
+        case let .failed(error):
+          XCTAssertEqual(error, mockError)
+          errorReceived.fulfill()
+        default: break
+        }
+      }
+    }
+    
+    defer { observer.cancel() }
+    
+    try await session.start(payload: .init())
+    
+    peripheral.onError?(mockError)
+    
+    await fulfillment(of: [errorReceived], timeout: 1)
+  }
+}
+  
+extension ExchangeSessionTests {
+  func test_dataExchange_happyPath() async throws {
+    let localNonce: UInt64 = 2
+    let peerNonce: UInt64 = 1
+    let localPayload = Data(Array(repeating: UInt8(ascii: "L"), count: 10))
+    let peerPayload = Data(Array(repeating: UInt8(ascii: "P"), count: 10))
+    let distance: Float = 0.1
+
+    let ranger = MockRanger()
+    let (session, central, peripheral) = makeSUT(
+      localNonces: [localNonce],
+      ranger: ranger,
+      configuration: .init(distanceThreshold: 0.5),
+    )
+
+    let completed = expectation(description: "the exchange completed")
+    let receivedEvents = Mutex<[ExchangeSession.Event]>([])
+
+    let events = session.events.receive()
+    let observer = Task {
+      for await event in events {
+        receivedEvents.withLock { $0.append(event) }
+        guard case .completed = event else { continue }
+        completed.fulfill()
+      }
+    }
+    defer { observer.cancel() }
+
+    try await session.start(payload: localPayload)
+
+    simulatePeerDiscovery(advertising: peerNonce, on: central)
+    central.onConnected?()
+
+    ranger.onDistance?(distance)
+
+    central.onSendProgress?(
+      TransferProgress(bytes: 0, total: localPayload.count),
+    )
+    central.onReceiveProgress?(
+      TransferProgress(bytes: 0, total: peerPayload.count),
+    )
+    central.onSendProgress?(
+      TransferProgress(bytes: localPayload.count, total: localPayload.count),
+    )
+    central.onReceiveProgress?(
+      TransferProgress(bytes: peerPayload.count, total: peerPayload.count),
+    )
+
+    central.onPayloadReceived?(peerPayload)
+    central.onPeerReceivedDataConfirmation?()
+
+    await fulfillment(of: [completed], timeout: 1)
+
+    XCTAssertEqual(
+      receivedEvents.withLock { $0 },
+      [
+        .connected,
+        .distance(distance),
+        .progress(0),
+        .progress(0),
+        .progress(0.5),
+        .progress(1),
+        .received(peerPayload),
+        .completed,
+      ],
+    )
+    XCTAssertEqual(
+      central.calls,
+      [
+        .startScanning(nonce: localNonce),
+        .send(payload: localPayload),
+        .confirmSent,
+      ],
+    )
+    XCTAssertEqual(
+      peripheral.calls,
+      [
+        .startAdvertising(nonce: localNonce),
+        .stop,
+      ],
+    )
   }
 }
 
