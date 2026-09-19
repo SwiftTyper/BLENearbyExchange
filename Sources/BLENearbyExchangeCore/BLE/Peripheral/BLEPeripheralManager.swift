@@ -50,7 +50,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     )
   }
 
-  func startAdvertising(nonce: UInt64) async throws {
+  func startAdvertising(nonce: UInt32) async throws {
     manager.removeAllServices()
 
     handshakeChar = CBMMutableCharacteristic(

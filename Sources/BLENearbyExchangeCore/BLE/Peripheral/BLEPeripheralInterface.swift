@@ -12,7 +12,7 @@ protocol BLEPeripheralInterface {
   var onSendProgress: ((TransferProgress) -> Void)? { get set }
   var onReceiveProgress: ((TransferProgress) -> Void)? { get set }
 
-  func startAdvertising(nonce: UInt64) async throws
+  func startAdvertising(nonce: UInt32) async throws
   func send(payload: Data)
   func confirmSent()
   func sendTerminate(_ control: GATT.Control, completion: @escaping () -> Void)

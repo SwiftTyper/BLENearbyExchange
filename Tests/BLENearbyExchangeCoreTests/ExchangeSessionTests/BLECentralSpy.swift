@@ -5,7 +5,7 @@ import Foundation
 @BLEActor
 final class BLECentralSpy: BLECentralInterface {
   enum Call: Equatable {
-    case startScanning(nonce: UInt64)
+    case startScanning(nonce: UInt32)
     case send(payload: Data)
     case confirmSent
     case sendTerminate(GATT.Control)
@@ -13,8 +13,8 @@ final class BLECentralSpy: BLECentralInterface {
   }
 
   private(set) var calls: [Call] = []
-  private(set) var scanningNonce: UInt64?
-  var onStartScanning: ((UInt64) -> Void)?
+  private(set) var scanningNonce: UInt32?
+  var onStartScanning: ((UInt32) -> Void)?
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
@@ -25,7 +25,7 @@ final class BLECentralSpy: BLECentralInterface {
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
 
-  func startScanning(nonce: UInt64) {
+  func startScanning(nonce: UInt32) {
     calls.append(.startScanning(nonce: nonce))
     scanningNonce = nonce
     onStartScanning?(nonce)

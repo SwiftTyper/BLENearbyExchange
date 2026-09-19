@@ -12,7 +12,7 @@ protocol BLECentralInterface {
   var onSendProgress: ((TransferProgress) -> Void)? { get set }
   var onReceiveProgress: ((TransferProgress) -> Void)? { get set }
 
-  func startScanning(nonce: UInt64)
+  func startScanning(nonce: UInt32)
   func send(payload: Data)
   func confirmSent()
   func sendTerminate(_ control: GATT.Control, completion: @escaping () -> Void)
