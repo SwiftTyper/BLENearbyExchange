@@ -7,15 +7,30 @@ on:
     branches: [ "main" ]
 
 jobs:
+  format:
+    runs-on: xcode-27
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install SwiftFormat
+      run: brew install swiftformat
+
+    - name: Lint
+      run: swiftformat --lint --reporter github-actions-log .
+
   build-and-test:
+    needs: format
     runs-on: xcode-27
     steps:
     - uses: actions/checkout@v4
 
     - name: Select Xcode
-      run: sudo xcode-select -switch /Applications/Xcode_27_beta_6.app
+      run: sudo xcode-select -switch /Applications/Xcode.app
 
-    - name: Build & Test
+    - name: Build
+      run: xcodebuild clean build -scheme BLENearbyExchange -destination 'platform=iOS Simulator,name=iPhone 17'
+
+    - name: Test
       run: |
         xcodebuild test \
           -scheme BLENearbyExchange \
