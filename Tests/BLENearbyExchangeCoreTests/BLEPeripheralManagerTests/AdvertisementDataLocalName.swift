@@ -1,7 +1,7 @@
 @testable import BLENearbyExchangeCore
 import Testing
 
-struct AdvertisementBudgetTests {
+struct AdvertisementLocalNameTests {
   var localNameBudgetData: Int {
     let advertisingDataLength = 31
     let serviceUUID = 16 + 2 //  header (Length + AD Type) + 128bit uuid

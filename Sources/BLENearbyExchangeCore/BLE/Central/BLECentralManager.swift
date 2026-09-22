@@ -1,6 +1,7 @@
 import CoreBluetooth
 import CoreBluetoothMock
 import Foundation
+import CryptoKit
 
 @BLEActor
 final class BLECentralManager: NSObject, BLECentralInterface {
@@ -28,6 +29,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
+  private var communicationCipher: CommunicationCipher? = nil
   private let transferQueue: UnlimitedTransferQueue = .init()
 
   init(
@@ -334,13 +336,28 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       handshakeChar?.isNotifying == true,
       let handshakeChar
     else { return }
-
-    guard let token = ranger.localDiscoveryToken()
-    else {
+    
+    guard let token = ranger.localDiscoveryToken() else {
       onError?(.rangingFailed("No local discovery token."))
       return
     }
 
+    let communicationCipher = CommunicationCipher()
+    
+    let handshakePayload = HandshakePayload(
+      publicKey: communicationCipher.localPublicKey.rawRepresentation,
+      token: token
+    )
+    
+    self.communicationCipher = communicationCipher
+
+    guard let handshakePayloadData = try? JSONEncoder().encode(handshakePayload)
+    else {
+      //TODO
+      onError?(.disconnected)
+      return
+    }
+    
     transferQueue.add { [weak self] in
       guard
         let self,
@@ -348,7 +365,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       else { return false }
 
       peripheral?.writeValue(
-        token,
+        handshakePayloadData,
         for: handshakeChar,
         type: .withResponse,
       )
@@ -374,8 +391,17 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     switch characteristic.uuid {
     case GATT.handshake.cbuuid:
+      guard
+        let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: value)
+      else {
+        onError?(.handshakeFailed("couldn't decode handshake payload"))
+        return
+      }
+      
+      try? self.communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+      
       do {
-        try ranger.startRanging(peerToken: value)
+        try ranger.startRanging(peerToken: peerHandshakePayload.token)
       } catch {
         onError?(.rangingFailed(error.localizedDescription))
       }

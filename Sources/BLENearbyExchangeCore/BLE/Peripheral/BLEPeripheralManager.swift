@@ -1,5 +1,6 @@
 import CoreBluetoothMock
 import Foundation
+import CryptoKit
 
 @BLEActor
 final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
@@ -27,6 +28,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
+  private var communicationCipher: CommunicationCipher? = nil
 
   private var centralSubscribedCharacteristics: Set<String> = []
   private var terminationCompletion: (() -> Void)?
@@ -267,7 +269,9 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
     for request in requests {
       switch request.characteristic.uuid {
       case GATT.handshake.cbuuid:
-        guard let peerToken = request.value
+        guard
+          let peerHandshakeData = request.value,
+          let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: peerHandshakeData)
         else {
           peripheral.respond(to: request, withResult: .invalidAttributeValueLength)
           onError?(.handshakeFailed("No peer discovery token."))
@@ -282,22 +286,38 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         }
 
         peripheral.respond(to: request, withResult: .success)
-
+        
+        let communicationCipher = CommunicationCipher()
+        
+        let handshakePayload = HandshakePayload(
+          publicKey: communicationCipher.localPublicKey.rawRepresentation,
+          token: localToken
+        )
+        
+        self.communicationCipher = communicationCipher
+        
+        guard let handshakePayloadData = try? JSONEncoder().encode(handshakePayload) else {
+          onError?(.handshakeFailed("Encoding handshake payload failed"))
+          return
+        }
+         
         transferQueue.add { [weak self] in
           guard let self else { return false }
 
           return peripheral.updateValue(
-            localToken,
+            handshakePayloadData,
             for: handshakeChar,
             onSubscribedCentrals: nil,
           )
         }
 
         do {
-          try ranger.startRanging(peerToken: peerToken)
+          try ranger.startRanging(peerToken: peerHandshakePayload.token)
         } catch {
           onError?(.rangingFailed(error.localizedDescription))
         }
+        
+        try? self.communicationCipher?.establish(with: peerHandshakePayload.publicKey)
 
       case GATT.payload.cbuuid:
         guard let value = request.value
