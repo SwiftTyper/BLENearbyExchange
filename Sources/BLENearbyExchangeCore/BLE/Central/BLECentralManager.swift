@@ -125,15 +125,16 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   func send(payload: Data) {
     guard
       let peripheral,
-      let payloadChar
+      let payloadChar,
+      let encryptedPayload = try? self.communicationCipher?.encrypt(data: payload)
     else { return }
 
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
 
     sentBytes = 0
-    payloadBytes = payload.count
+    payloadBytes = encryptedPayload.count
 
-    for chunk in Chunker.chunk(payload, mtu: mtu) {
+    for chunk in Chunker.chunk(encryptedPayload, mtu: mtu) {
       transferQueue.add { [weak self] in
         guard
           let self,
