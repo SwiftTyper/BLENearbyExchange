@@ -328,7 +328,9 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         let full = try? reassembler.add(frame: value)
         onReceiveProgress?(reassembler.progress)
 
-        guard let full
+        guard
+          let full,
+          let decryptedPayload = try? self.communicationCipher?.decrypt(data: full)
         else { continue }
 
         transferQueue.add { [weak self] in
@@ -341,7 +343,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           )
         }
 
-        onPayloadReceived?(full)
+        onPayloadReceived?(decryptedPayload)
 
       case GATT.control.cbuuid:
         guard

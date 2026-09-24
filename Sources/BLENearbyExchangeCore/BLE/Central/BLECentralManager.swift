@@ -409,12 +409,16 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     case GATT.payload.cbuuid:
       let full = try? reassembler.add(frame: value)
+      
       onReceiveProgress?(reassembler.progress)
-
-      guard let full, let controlChar
+      
+      guard
+        let full,
+        let controlChar,
+        let decryptedPayload = try? self.communicationCipher?.decrypt(data: full)
       else { return }
 
-      onPayloadReceived?(full)
+      onPayloadReceived?(decryptedPayload)
 
       transferQueue.add {
         guard peripheral.canSendWriteWithoutResponse
