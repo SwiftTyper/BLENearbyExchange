@@ -8,6 +8,7 @@ struct PlainTextCipher: MessageCipherInterface {
   }
 
   func establish(with _: Data) throws {}
+
   func encrypt(data: Data) throws -> Data? {
     data
   }

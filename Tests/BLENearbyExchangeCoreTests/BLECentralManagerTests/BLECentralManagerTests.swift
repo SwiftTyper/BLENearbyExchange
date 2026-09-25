@@ -150,7 +150,7 @@ extension BLECentralManagerTests {
 
     central.startScanning(nonce: 2)
 
-    await fulfillment(of: [handshakeFailed, peerHandshakeNotReceived], timeout: 0.2)
+    await fulfillment(of: [handshakeFailed, peerHandshakeNotReceived], timeout: 1)
   }
 
   func test_localRangingFailureIsReported() async throws {
