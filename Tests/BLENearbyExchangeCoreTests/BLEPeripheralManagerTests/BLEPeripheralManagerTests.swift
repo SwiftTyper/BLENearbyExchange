@@ -269,11 +269,11 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let publicKey = P384.KeyAgreement.PrivateKey().publicKey
     let handshake = HandshakePayload(
       publicKey: publicKey.rawRepresentation,
-      token: peerTokenData
+      token: peerTokenData,
     )
     let peerHandshakeData = try JSONEncoder().encode(handshake)
-    let lessThanMaxFrameSize: Int = 20
-    
+    let lessThanMaxFrameSize = 20
+
     for chunk in Chunker.chunk(peerHandshakeData, mtu: lessThanMaxFrameSize) {
       peer.spec.simulateWriteRequest(
         chunk,
@@ -283,7 +283,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
         switch result {
         case .success:
           break
-          
+
         case let .failure(error):
           XCTFail("\(error.localizedDescription)")
         }

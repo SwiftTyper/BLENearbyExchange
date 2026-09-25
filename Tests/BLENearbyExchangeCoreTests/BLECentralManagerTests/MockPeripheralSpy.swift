@@ -9,41 +9,41 @@ final class MockPeripheralSpy: @unchecked Sendable {
   private let mtu: Int
   private let characteristics: [CBMCharacteristicMock]
   private let state = Mutex<State>(.init())
-  
+
   struct State {
     var handshakeToken: Data?
     var controls: [GATT.Control] = []
     var payloadReassembler = Reassembler()
     var handshakeReassembler = Reassembler()
   }
-  
+
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
     nonce: UInt32,
     mtu: Int = 64,
   ) {
     let name = RoleResolver.encode(nonce).base64EncodedString()
-    
+
     self.init(
       configuration: configuration,
       advertisedName: name,
       mtu: mtu,
     )
   }
-  
+
   init(
     configuration: NearbyExchange.Configuration = .init(),
     advertisedName: String,
     mtu: Int = 64,
   ) {
     self.mtu = mtu
-    
+
     characteristics = [
       CBMCharacteristicMock(type: GATT.handshake.cbuuid, properties: [.notify, .write]),
       CBMCharacteristicMock(type: GATT.payload.cbuuid, properties: [.writeWithoutResponse, .notify]),
       CBMCharacteristicMock(type: GATT.control.cbuuid, properties: [.write, .notify]),
     ]
-    
+
     spec = CBMPeripheralSpec
       .simulatePeripheral(proximity: .immediate)
       .advertising(
@@ -69,7 +69,7 @@ final class MockPeripheralSpy: @unchecked Sendable {
       )
       .build()
   }
-  
+
   var onPayload: ((Data) -> Void)?
   var onControl: ((GATT.Control) -> Void)?
   var onDisconnect: ((Error?) -> Void)?
@@ -144,20 +144,20 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
       let full = state.withLock { state in
         try? state.payloadReassembler.add(frame: data)
       }
-      
+
       if let full {
         onPayload?(full)
       }
-    
+
     case GATT.handshake.cbuuid:
       let full = state.withLock { state in
         try? state.handshakeReassembler.add(frame: data)
       }
-      
+
       if let full {
         onHandshake?(full)
       }
-      
+
     default: break
     }
   }

@@ -1,9 +1,9 @@
 @testable import BLENearbyExchangeCore
 import CoreBluetooth
 import CoreBluetoothMock
+import CryptoKit
 import Foundation
 import XCTest
-import CryptoKit
 
 @BLEActor
 final class BLECentralManagerTests: XCTestCase {
@@ -94,21 +94,21 @@ extension BLECentralManagerTests {
     let central = await makeSUT(peer: peer, ranger: ranger)
 
     let peerReceivedHandshake = expectation(description: "peer received handshake")
-    
+
     peer.onHandshake = { receivedCentralHandshakeData in
       let payload = try? JSONDecoder().decode(HandshakePayload.self, from: receivedCentralHandshakeData)
       XCTAssertNotNil(payload)
       XCTAssertEqual(centralTokenData, payload?.token)
       peerReceivedHandshake.fulfill()
     }
-    
+
     await connect(central, nonce: 2)
 
     let peerTokenData = Data("peer-token".utf8)
     let publicKey = P384.KeyAgreement.PrivateKey().publicKey
     let handshake = HandshakePayload(
       publicKey: publicKey.rawRepresentation,
-      token: peerTokenData
+      token: peerTokenData,
     )
     let peerHandshakeData = try JSONEncoder().encode(handshake)
     let rangingStarted = expectation(description: "ranging started")
@@ -136,10 +136,10 @@ extension BLECentralManagerTests {
       XCTAssertEqual(error, .rangingFailed("No local discovery token."))
       handshakeFailed.fulfill()
     }
-    
+
     let peerHandshakeNotReceived = expectation(description: "peer didn't receive handshake")
     peerHandshakeNotReceived.isInverted = true
-    
+
     peer.onHandshake = { _ in
       peerHandshakeNotReceived.fulfill()
     }
@@ -167,12 +167,12 @@ extension BLECentralManagerTests {
 
       rangingFailed.fulfill()
     }
-    
+
     let peerTokenData = Data("peer-token".utf8)
     let publicKey = P384.KeyAgreement.PrivateKey().publicKey
     let handshake = HandshakePayload(
       publicKey: publicKey.rawRepresentation,
-      token: peerTokenData
+      token: peerTokenData,
     )
     let peerHandshakeData = try JSONEncoder().encode(handshake)
 

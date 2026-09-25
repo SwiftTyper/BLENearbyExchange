@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 
 protocol MessageCipherInterface {
   var localPublicKey: P384.KeyAgreement.PublicKey { get }

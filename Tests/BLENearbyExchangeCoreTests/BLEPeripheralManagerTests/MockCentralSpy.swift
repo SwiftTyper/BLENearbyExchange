@@ -55,7 +55,7 @@ extension MockCentralSpy: @BLEActor CBMCentralSpecDelegate {
     case GATT.handshake.cbuuid:
       guard let full = try? reassembler.add(frame: value)
       else { return }
-      
+
       onHandshake?(full)
 
     default:

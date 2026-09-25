@@ -1,7 +1,7 @@
 import CoreBluetooth
 import CoreBluetoothMock
-import Foundation
 import CryptoKit
+import Foundation
 
 @BLEActor
 final class BLECentralManager: NSObject, BLECentralInterface {
@@ -30,7 +30,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   private var payloadBytes = 0
   private var reassembler = Reassembler()
   private let transferQueue: UnlimitedTransferQueue = .init()
-  private var communicationCipher: MessageCipherInterface? = nil
+  private var communicationCipher: MessageCipherInterface?
   private var makeCipher: () -> any MessageCipherInterface
 
   init(
@@ -42,7 +42,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     self.configuration = configuration
     self.ranger = ranger
     self.makeCipher = makeCipher
-    self.communicationCipher = makeCipher()
+    communicationCipher = makeCipher()
 
     super.init()
 
@@ -130,7 +130,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     guard
       let peripheral,
       let payloadChar,
-      let encryptedPayload = try? self.communicationCipher?.encrypt(data: payload)
+      let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
     else { return }
 
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
@@ -341,7 +341,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       handshakeChar?.isNotifying == true,
       let handshakeChar
     else { return }
-    
+
     guard
       let token = ranger.localDiscoveryToken(),
       let communicationCipher
@@ -352,31 +352,31 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     let handshakePayload = HandshakePayload(
       publicKey: communicationCipher.localPublicKey.rawRepresentation,
-      token: token
+      token: token,
     )
-    
+
     guard
       let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),
-      let mtu = self.peripheral?.maximumWriteValueLength(for: .withoutResponse)
+      let mtu = peripheral?.maximumWriteValueLength(for: .withoutResponse)
     else {
-      //TODO
+      // TODO:
       onError?(.disconnected)
       return
     }
-    
+
     for chunk in Chunker.chunk(handshakePayloadData, mtu: mtu) {
       transferQueue.add { [weak self] in
         guard
           let self,
           peripheral?.canSendWriteWithoutResponse == true
-            else { return false }
-        
+        else { return false }
+
         peripheral?.writeValue(
           chunk,
           for: handshakeChar,
           type: .withoutResponse,
         )
-        
+
         return true
       }
     }
@@ -401,16 +401,16 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     case GATT.handshake.cbuuid:
       guard let full = try? reassembler.add(frame: value)
       else { return }
-      
+
       guard
         let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
       else {
         onError?(.handshakeFailed("couldn't decode handshake payload"))
         return
       }
-      
-      try? self.communicationCipher?.establish(with: peerHandshakePayload.publicKey)
-      
+
+      try? communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+
       do {
         try ranger.startRanging(peerToken: peerHandshakePayload.token)
       } catch {
@@ -419,13 +419,13 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     case GATT.payload.cbuuid:
       let full = try? reassembler.add(frame: value)
-      
+
       onReceiveProgress?(reassembler.progress)
-      
+
       guard
         let full,
         let controlChar,
-        let decryptedPayload = try? self.communicationCipher?.decrypt(data: full)
+        let decryptedPayload = try? communicationCipher?.decrypt(data: full)
       else { return }
 
       onPayloadReceived?(decryptedPayload)
