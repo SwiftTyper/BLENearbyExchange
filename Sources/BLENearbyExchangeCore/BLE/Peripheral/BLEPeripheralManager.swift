@@ -28,8 +28,8 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
-  private var communicationCipher: any MessageCipher? = nil
-  private var makeCipher: () -> any MessageCipher
+  private var communicationCipher: any MessageCipherInterface? = nil
+  private var makeCipher: () -> any MessageCipherInterface
 
   private var centralSubscribedCharacteristics: Set<String> = []
   private var terminationCompletion: (() -> Void)?
@@ -38,7 +38,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   init(
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
-    makeCipher: @escaping () -> any MessageCipher = { CommunicationCipher() },
+    makeCipher: @escaping () -> any MessageCipherInterface = { MessageCipher() },
     forceMock: Bool,
   ) {
     self.configuration = configuration
@@ -285,20 +285,18 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           continue
         }
 
-        guard let localToken = ranger.localDiscoveryToken()
+        guard
+          let localToken = ranger.localDiscoveryToken(),
+          let communicationCipher
         else {
           onError?(.rangingFailed("No local discovery token."))
           continue
         }
         
-        let communicationCipher = makeCipher()
-        
         let handshakePayload = HandshakePayload(
           publicKey: communicationCipher.localPublicKey.rawRepresentation,
           token: localToken
         )
-        
-        self.communicationCipher = communicationCipher
         
         guard
           let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),

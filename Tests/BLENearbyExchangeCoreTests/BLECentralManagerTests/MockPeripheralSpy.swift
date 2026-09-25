@@ -9,40 +9,41 @@ final class MockPeripheralSpy: @unchecked Sendable {
   private let mtu: Int
   private let characteristics: [CBMCharacteristicMock]
   private let state = Mutex<State>(.init())
-
+  
   struct State {
     var handshakeToken: Data?
     var controls: [GATT.Control] = []
-    var reassembler = Reassembler()
+    var payloadReassembler = Reassembler()
+    var handshakeReassembler = Reassembler()
   }
-
+  
   convenience init(
     configuration: NearbyExchange.Configuration = .init(),
     nonce: UInt32,
     mtu: Int = 64,
   ) {
     let name = RoleResolver.encode(nonce).base64EncodedString()
-
+    
     self.init(
       configuration: configuration,
       advertisedName: name,
       mtu: mtu,
     )
   }
-
+  
   init(
     configuration: NearbyExchange.Configuration = .init(),
     advertisedName: String,
     mtu: Int = 64,
   ) {
     self.mtu = mtu
-
+    
     characteristics = [
       CBMCharacteristicMock(type: GATT.handshake.cbuuid, properties: [.notify, .write]),
       CBMCharacteristicMock(type: GATT.payload.cbuuid, properties: [.writeWithoutResponse, .notify]),
       CBMCharacteristicMock(type: GATT.control.cbuuid, properties: [.write, .notify]),
     ]
-
+    
     spec = CBMPeripheralSpec
       .simulatePeripheral(proximity: .immediate)
       .advertising(
@@ -68,14 +69,11 @@ final class MockPeripheralSpy: @unchecked Sendable {
       )
       .build()
   }
-
+  
   var onPayload: ((Data) -> Void)?
   var onControl: ((GATT.Control) -> Void)?
   var onDisconnect: ((Error?) -> Void)?
-
-  var handshakeToken: Data? {
-    state.withLock(\.handshakeToken)
-  }
+  var onHandshake: ((Data) -> Void)?
 
   var controls: [GATT.Control] {
     state.withLock(\.controls)
@@ -86,15 +84,16 @@ final class MockPeripheralSpy: @unchecked Sendable {
   }
 
   func notify(_ data: Data, on uuid: UUID) {
-    guard let characteristic = characteristics.first(where: { $0.uuid.uuidString == uuid.uuidString })
+    guard
+      let characteristic = characteristics.first(where: { $0.uuid.uuidString == uuid.uuidString })
     else { return }
 
     spec.simulateValueUpdate(data, for: characteristic)
   }
 
-  func send(payload: Data) {
+  func send(payload: Data, on uuid: UUID = GATT.payload) {
     for frame in Chunker.chunk(payload, mtu: mtu) {
-      notify(frame, on: GATT.payload)
+      notify(frame, on: uuid)
     }
   }
 
@@ -118,10 +117,6 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     data: Data,
   ) -> Result<Void, Error> {
     switch characteristic.uuid {
-    case GATT.handshake.cbuuid:
-      state.withLock { $0.handshakeToken = data }
-      return .success(())
-
     case GATT.control.cbuuid:
       guard
         let raw = data.first,
@@ -144,15 +139,26 @@ extension MockPeripheralSpy: CBMPeripheralSpecDelegate {
     didReceiveWriteCommandFor characteristic: CBMCharacteristicMock,
     data: Data,
   ) {
-    guard characteristic.uuid == GATT.payload.cbuuid
-    else { return }
-
-    let full = state.withLock { state in
-      try? state.reassembler.add(frame: data)
-    }
-
-    if let full {
-      onPayload?(full)
+    switch characteristic.uuid {
+    case GATT.payload.cbuuid:
+      let full = state.withLock { state in
+        try? state.payloadReassembler.add(frame: data)
+      }
+      
+      if let full {
+        onPayload?(full)
+      }
+    
+    case GATT.handshake.cbuuid:
+      let full = state.withLock { state in
+        try? state.handshakeReassembler.add(frame: data)
+      }
+      
+      if let full {
+        onHandshake?(full)
+      }
+      
+    default: break
     }
   }
 

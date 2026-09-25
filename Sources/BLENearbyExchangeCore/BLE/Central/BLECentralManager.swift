@@ -29,16 +29,20 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
-  private var communicationCipher: CommunicationCipher? = nil
   private let transferQueue: UnlimitedTransferQueue = .init()
+  private var communicationCipher: MessageCipherInterface? = nil
+  private var makeCipher: () -> any MessageCipherInterface
 
   init(
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
+    makeCipher: @escaping () -> any MessageCipherInterface = { MessageCipher() },
     forceMock: Bool = false,
   ) {
     self.configuration = configuration
     self.ranger = ranger
+    self.makeCipher = makeCipher
+    self.communicationCipher = makeCipher()
 
     super.init()
 
@@ -338,20 +342,19 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       let handshakeChar
     else { return }
     
-    guard let token = ranger.localDiscoveryToken() else {
+    guard
+      let token = ranger.localDiscoveryToken(),
+      let communicationCipher
+    else {
       onError?(.rangingFailed("No local discovery token."))
       return
     }
 
-    let communicationCipher = CommunicationCipher()
-    
     let handshakePayload = HandshakePayload(
       publicKey: communicationCipher.localPublicKey.rawRepresentation,
       token: token
     )
     
-    self.communicationCipher = communicationCipher
-
     guard
       let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),
       let mtu = self.peripheral?.maximumWriteValueLength(for: .withoutResponse)
@@ -396,8 +399,10 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     switch characteristic.uuid {
     case GATT.handshake.cbuuid:
+      guard let full = try? reassembler.add(frame: value)
+      else { return }
+      
       guard
-        let full = try? reassembler.add(frame: value),
         let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
       else {
         onError?(.handshakeFailed("couldn't decode handshake payload"))

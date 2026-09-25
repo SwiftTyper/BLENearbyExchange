@@ -1,14 +1,7 @@
 import Foundation
 import CryptoKit
 
-protocol MessageCipher {
-  var localPublicKey: P384.KeyAgreement.PublicKey { get }
-  mutating func establish(with peerPublicKeyData: Data) throws
-  func encrypt(data: Data) throws -> Data?
-  func decrypt(data: Data) throws -> Data?
-}
-
-struct CommunicationCipher: MessageCipher {
+struct MessageCipher: MessageCipherInterface {
   private var sharedKey: SymmetricKey?
   private let localPrivateKey: P384.KeyAgreement.PrivateKey
   
