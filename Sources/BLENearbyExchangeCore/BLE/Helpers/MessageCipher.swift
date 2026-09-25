@@ -21,7 +21,7 @@ struct MessageCipher: MessageCipherInterface {
       using: SHA256.self,
       salt: Data(),
       sharedInfo: Data("BLECommunication".utf8),
-      outputByteCount: 48
+      outputByteCount: 32
     )
     
     self.sharedKey = key
