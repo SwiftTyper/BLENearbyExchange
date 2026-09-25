@@ -168,7 +168,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     await fulfillment(of: [transferStarted], timeout: 2.0)
 
     // this is significatly smaller than the outgoing payload so
-    // that it finished way earlier and we try to send done during the outgoing payload transfer
+    // that it finished way earlier and so the peripheral tries to send done during the outgoing payload transfer
     let incomingPayload = Data(repeating: 0x01, count: 100)
 
     for chunk in Chunker.chunk(incomingPayload, mtu: peer.spec.maximumUpdateValueLength) {
@@ -265,7 +265,6 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let characterisitcs = try await connect(peer, to: peripheral)
     let handshakeChar = try characterisitcs.find(by: GATT.handshake.cbuuid)
 
-    let peerTokenReceivedSuccessfully = expectation(description: "peer token sent")
     let peerTokenData = Data("peer-token".utf8)
     let publicKey = P384.KeyAgreement.PrivateKey().publicKey
     let handshake = HandshakePayload(
@@ -273,18 +272,21 @@ final class BLEPeripheralManagerTests: XCTestCase {
       token: peerTokenData
     )
     let peerHandshakeData = try JSONEncoder().encode(handshake)
-
-    peer.spec.simulateWriteRequest(
-      peerHandshakeData,
-      for: handshakeChar,
-      withResponse: true,
-    ) { result in
-      switch result {
-      case .success:
-        peerTokenReceivedSuccessfully.fulfill()
-
-      case let .failure(error):
-        XCTFail("\(error.localizedDescription)")
+    let lessThanMaxFrameSize: Int = 20
+    
+    for chunk in Chunker.chunk(peerHandshakeData, mtu: lessThanMaxFrameSize) {
+      peer.spec.simulateWriteRequest(
+        chunk,
+        for: handshakeChar,
+        withResponse: false,
+      ) { result in
+        switch result {
+        case .success:
+          break
+          
+        case let .failure(error):
+          XCTFail("\(error.localizedDescription)")
+        }
       }
     }
 
@@ -304,7 +306,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       XCTAssertEqual(receivedTokenData, peerTokenData)
     }
 
-    await fulfillment(of: [peerTokenReceivedSuccessfully, centralReceivedToken, peerTokenReceived], timeout: 2.0)
+    await fulfillment(of: [centralReceivedToken, peerTokenReceived], timeout: 1.0)
   }
 }
 
@@ -320,6 +322,7 @@ extension BLEPeripheralManagerTests {
     let peripheral = BLEPeripheralManager(
       configuration: .init(),
       ranger: ranger,
+      makeCipher: { PlainTextCipher() },
       forceMock: true,
     )
 

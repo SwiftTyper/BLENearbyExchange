@@ -28,7 +28,8 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
-  private var communicationCipher: CommunicationCipher? = nil
+  private var communicationCipher: any MessageCipher? = nil
+  private var makeCipher: () -> any MessageCipher
 
   private var centralSubscribedCharacteristics: Set<String> = []
   private var terminationCompletion: (() -> Void)?
@@ -37,10 +38,13 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   init(
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
+    makeCipher: @escaping () -> any MessageCipher = { CommunicationCipher() },
     forceMock: Bool,
   ) {
     self.configuration = configuration
     self.ranger = ranger
+    self.makeCipher = makeCipher
+    self.communicationCipher = makeCipher()
 
     super.init()
 
@@ -57,7 +61,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
     handshakeChar = CBMMutableCharacteristic(
       type: GATT.handshake.cbuuid,
-      properties: [.notify, .write],
+      properties: [.notify, .writeWithoutResponse],
       value: nil,
       permissions: [.writeable],
     )
@@ -142,6 +146,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
+    communicationCipher = self.makeCipher()
 
     onPayloadReceived = nil
     onRoleConfirmed = nil
@@ -272,24 +277,21 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
       switch request.characteristic.uuid {
       case GATT.handshake.cbuuid:
         guard
-          let peerHandshakeData = request.value,
-          let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: peerHandshakeData)
+          let value = request.value,
+          let full = try? self.reassembler.add(frame: value),
+          let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
         else {
-          peripheral.respond(to: request, withResult: .invalidAttributeValueLength)
           onError?(.handshakeFailed("No peer discovery token."))
           continue
         }
 
         guard let localToken = ranger.localDiscoveryToken()
         else {
-          peripheral.respond(to: request, withResult: .unlikelyError)
           onError?(.rangingFailed("No local discovery token."))
           continue
         }
-
-        peripheral.respond(to: request, withResult: .success)
         
-        let communicationCipher = CommunicationCipher()
+        let communicationCipher = makeCipher()
         
         let handshakePayload = HandshakePayload(
           publicKey: communicationCipher.localPublicKey.rawRepresentation,
@@ -298,21 +300,26 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         
         self.communicationCipher = communicationCipher
         
-        guard let handshakePayloadData = try? JSONEncoder().encode(handshakePayload) else {
+        guard
+          let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),
+          let mtu = subscribedCentral?.maximumUpdateValueLength
+        else {
           onError?(.handshakeFailed("Encoding handshake payload failed"))
           return
         }
-         
-        transferQueue.add { [weak self] in
-          guard let self else { return false }
-
-          return peripheral.updateValue(
-            handshakePayloadData,
-            for: handshakeChar,
-            onSubscribedCentrals: nil,
-          )
+        
+        for chunk in Chunker.chunk(handshakePayloadData, mtu: mtu) {
+          transferQueue.add { [weak self] in
+            guard let self else { return false }
+            
+            return peripheral.updateValue(
+              chunk,
+              for: handshakeChar,
+              onSubscribedCentrals: nil,
+            )
+          }
         }
-
+         
         do {
           try ranger.startRanging(peerToken: peerHandshakePayload.token)
         } catch {

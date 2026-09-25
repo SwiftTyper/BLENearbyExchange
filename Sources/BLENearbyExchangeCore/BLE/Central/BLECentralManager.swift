@@ -352,26 +352,30 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     
     self.communicationCipher = communicationCipher
 
-    guard let handshakePayloadData = try? JSONEncoder().encode(handshakePayload)
+    guard
+      let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),
+      let mtu = self.peripheral?.maximumWriteValueLength(for: .withoutResponse)
     else {
       //TODO
       onError?(.disconnected)
       return
     }
     
-    transferQueue.add { [weak self] in
-      guard
-        let self,
-        peripheral?.canSendWriteWithoutResponse == true
-      else { return false }
-
-      peripheral?.writeValue(
-        handshakePayloadData,
-        for: handshakeChar,
-        type: .withResponse,
-      )
-
-      return true
+    for chunk in Chunker.chunk(handshakePayloadData, mtu: mtu) {
+      transferQueue.add { [weak self] in
+        guard
+          let self,
+          peripheral?.canSendWriteWithoutResponse == true
+            else { return false }
+        
+        peripheral?.writeValue(
+          chunk,
+          for: handshakeChar,
+          type: .withoutResponse,
+        )
+        
+        return true
+      }
     }
 
     onConnected?()
@@ -393,7 +397,8 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     switch characteristic.uuid {
     case GATT.handshake.cbuuid:
       guard
-        let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: value)
+        let full = try? reassembler.add(frame: value),
+        let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
       else {
         onError?(.handshakeFailed("couldn't decode handshake payload"))
         return

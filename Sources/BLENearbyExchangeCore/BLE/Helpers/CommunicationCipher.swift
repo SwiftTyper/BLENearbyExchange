@@ -1,9 +1,20 @@
 import Foundation
 import CryptoKit
 
-struct CommunicationCipher {
+protocol MessageCipher {
+  var localPublicKey: P384.KeyAgreement.PublicKey { get }
+  mutating func establish(with peerPublicKeyData: Data) throws
+  func encrypt(data: Data) throws -> Data?
+  func decrypt(data: Data) throws -> Data?
+}
+
+struct CommunicationCipher: MessageCipher {
   private var sharedKey: SymmetricKey?
-  private let localPrivateKey: P384.KeyAgreement.PrivateKey = .init()
+  private let localPrivateKey: P384.KeyAgreement.PrivateKey
+  
+  init() {
+    self.localPrivateKey = .init()
+  }
   
   var localPublicKey: P384.KeyAgreement.PublicKey {
     self.localPrivateKey.publicKey
