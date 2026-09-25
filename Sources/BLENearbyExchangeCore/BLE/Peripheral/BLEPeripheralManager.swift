@@ -280,7 +280,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let value = request.value,
           let full = try? reassembler.add(frame: value)
         else { return }
-        
+
         guard
           let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
         else {

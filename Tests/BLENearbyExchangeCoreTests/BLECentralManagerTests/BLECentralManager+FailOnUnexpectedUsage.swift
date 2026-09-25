@@ -1,5 +1,5 @@
-import Foundation
 @testable import BLENearbyExchangeCore
+import Foundation
 import XCTest
 
 extension BLECentralManager {
@@ -10,7 +10,7 @@ extension BLECentralManager {
     let fail = { (name: String) in
       XCTFail("unexpected use of \(name)", file: file, line: line)
     }
-    
+
     onStateChange = { _ in fail("onStateChange") }
     onPayloadReceived = { _ in fail("onPayloadReceived") }
     onRoleReceived = { _ in fail("onRoleReceived") }
