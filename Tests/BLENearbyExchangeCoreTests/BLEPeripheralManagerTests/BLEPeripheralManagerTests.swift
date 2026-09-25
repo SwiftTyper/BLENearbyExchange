@@ -9,6 +9,8 @@ import XCTest
 final class BLEPeripheralManagerTests: XCTestCase {
   func test_terminationDuringPayloadTransfer_terminateControlTakesPrecence() async throws {
     let peripheral = await makeSUT()
+    peripheral.onSendProgress = { _ in }
+    
     let peer = MockCentralSpy()
 
     try await connect(peer, to: peripheral)
@@ -47,6 +49,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
   func test_send_transfersFullPayloadToPeer() async throws {
     let peripheral = await makeSUT()
+    peripheral.onSendProgress = { _ in }
+    
     let peer = MockCentralSpy()
 
     try await connect(peer, to: peripheral)
@@ -85,6 +89,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
   func test_centralSends_peripheralReceivesFullPayload() async throws {
     let peripheral = await makeSUT()
+    peripheral.onReceiveProgress = { _ in }
+    
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
@@ -147,6 +153,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
   func test_peripheralsPayloadOutgoingQueueFull_doesntDropOtherOutgoingCommands() async throws {
     let peripheral = await makeSUT()
+    
+    peripheral.onReceiveProgress = { _ in }
+    
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
@@ -327,6 +336,7 @@ extension BLEPeripheralManagerTests {
     )
 
     trackForMemoryLeaks(instance: peripheral, file: file, line: line)
+    peripheral.failOnUnexpectedUse(file: file, line: line)
 
     let poweredOn = expectation(description: "the manager powered on")
 

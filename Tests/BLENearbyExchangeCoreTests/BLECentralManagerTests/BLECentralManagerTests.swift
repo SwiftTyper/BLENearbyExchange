@@ -92,6 +92,8 @@ extension BLECentralManagerTests {
     let centralTokenData = Data("local-token".utf8)
     let ranger = MockRanger(localToken: centralTokenData)
     let central = await makeSUT(peer: peer, ranger: ranger)
+    
+    central.onRoleReceived = { _ in }
 
     let peerReceivedHandshake = expectation(description: "peer received handshake")
 
@@ -129,6 +131,8 @@ extension BLECentralManagerTests {
     ranger.localToken = nil
 
     let central = await makeSUT(peer: peer, ranger: ranger)
+    
+    central.onRoleReceived = { _ in }
 
     let handshakeFailed = expectation(description: "the handshake failed")
 
@@ -155,6 +159,8 @@ extension BLECentralManagerTests {
     ranger.rangingError = MockRanger.Failure.rangingUnavailable
 
     let central = await makeSUT(peer: peer, ranger: ranger)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -187,6 +193,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -218,6 +226,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -258,6 +268,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -278,6 +290,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -297,6 +311,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -316,6 +332,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -334,6 +352,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -353,6 +373,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+    
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -390,6 +412,7 @@ extension BLECentralManagerTests {
     )
 
     trackForMemoryLeaks(instance: central, file: file, line: line)
+    central.failOnUnexpectedUse(file: file, line: line)
 
     let poweredOn = expectation(description: "the manager powered on")
 

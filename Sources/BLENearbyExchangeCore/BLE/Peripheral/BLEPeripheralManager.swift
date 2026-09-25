@@ -278,11 +278,14 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
       case GATT.handshake.cbuuid:
         guard
           let value = request.value,
-          let full = try? reassembler.add(frame: value),
+          let full = try? reassembler.add(frame: value)
+        else { return }
+        
+        guard
           let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
         else {
           onError?(.handshakeFailed("No peer discovery token."))
-          continue
+          return
         }
 
         guard
@@ -290,7 +293,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let communicationCipher
         else {
           onError?(.rangingFailed("No local discovery token."))
-          continue
+          return
         }
 
         let handshakePayload = HandshakePayload(
@@ -328,7 +331,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
 
       case GATT.payload.cbuuid:
         guard let value = request.value
-        else { continue }
+        else { return }
 
         let full = try? reassembler.add(frame: value)
         onReceiveProgress?(reassembler.progress)
@@ -336,7 +339,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         guard
           let full,
           let decryptedPayload = try? communicationCipher?.decrypt(data: full)
-        else { continue }
+        else { return }
 
         transferQueue.add { [weak self] in
           guard let self else { return false }
@@ -356,7 +359,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let control = GATT.Control(rawValue: raw)
         else {
           peripheral.respond(to: request, withResult: .invalidAttributeValueLength)
-          continue
+          return
         }
 
         peripheral.respond(to: request, withResult: .success)
@@ -373,7 +376,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         }
 
       default:
-        continue
+        return
       }
     }
   }
