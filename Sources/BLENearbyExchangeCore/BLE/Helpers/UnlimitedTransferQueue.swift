@@ -3,31 +3,32 @@ import Foundation
 @BLEActor
 class UnlimitedTransferQueue {
   typealias Transfer = () -> Bool
+  
+  public enum Priority {
+    case regular
+    case high
+  }
 
-  private var stack: [Transfer] = []
-
+  private var fifo: [(Transfer, Priority)] = []
+  
   init() {}
 
   func clear() {
-    stack = []
+    fifo = []
   }
 
-  func add(value: @escaping Transfer) {
-    stack.append(value)
+  func add(priority: Priority = .regular, value: @escaping Transfer) {
+    fifo.append((value, priority))
 
-    if stack.count == 1 {
+    if fifo.count == 1 {
       resume()
     }
   }
 
   func resume() {
-    while !stack.isEmpty {
-      guard let workItem = stack.popLast() else { return }
-
-      if !workItem() {
-        stack.append(workItem)
-        return
-      }
+    while let index = fifo.firstIndex(where: { $0.1 == .high }) ?? fifo.firstIndex(where: { _ in true }) {
+      guard fifo[index].0() else { return }
+      fifo.remove(at: index)
     }
   }
 }

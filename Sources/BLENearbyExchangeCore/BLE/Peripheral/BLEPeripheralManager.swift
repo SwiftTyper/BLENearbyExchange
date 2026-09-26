@@ -106,7 +106,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
     transferQueue.clear()
 
-    transferQueue.add { [weak self] in
+    transferQueue.add(priority: .high) { [weak self] in
       guard let self else { return false }
 
       let result = manager.updateValue(
@@ -345,7 +345,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         
         reassembler.reset()
         
-        transferQueue.add { [weak self] in
+        transferQueue.add(priority: .high) { [weak self] in
           guard let self else { return false }
 
           return peripheral.updateValue(

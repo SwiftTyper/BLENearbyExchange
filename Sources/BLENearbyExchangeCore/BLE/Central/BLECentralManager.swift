@@ -73,7 +73,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
     transferQueue.clear()
 
-    transferQueue.add { [weak self] in
+    transferQueue.add(priority: .high) { [weak self] in
       guard
         let self,
         peripheral.canSendWriteWithoutResponse
@@ -434,7 +434,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
       onPayloadReceived?(decryptedPayload)
 
-      transferQueue.add {
+      transferQueue.add(priority: .high) {
         guard peripheral.canSendWriteWithoutResponse
         else { return false }
 
