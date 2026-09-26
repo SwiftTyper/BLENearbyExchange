@@ -320,7 +320,7 @@ public final class ExchangeSession: TimeoutController {
   private func checkDone() {
     guard didPeerReceive, didReceive, !didComplete else { return }
     didComplete = true
-    ranger?.stop()
     events.send(.completed)
+    self.stop()
   }
 }

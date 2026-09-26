@@ -102,6 +102,9 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     _ control: GATT.Control,
     completion: @escaping () -> Void,
   ) {
+    guard !centralSubscribedCharacteristics.isEmpty
+    else { return completion() }
+
     terminationCompletion = completion
 
     transferQueue.clear()
