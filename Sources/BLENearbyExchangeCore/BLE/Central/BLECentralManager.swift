@@ -72,26 +72,12 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     terminationCompletion = completion
 
     transferQueue.clear()
-
-    transferQueue.add(priority: .high) { [weak self] in
-      guard
-        let self,
-        peripheral.canSendWriteWithoutResponse
-      else { return false }
-
-      peripheral.writeValue(
-        Data([control.rawValue]),
-        for: controlChar,
-        type: .withResponse,
-      )
-
-      if terminationCompletion != nil {
-        completion()
-        self.terminationCompletion = nil
-      }
-
-      return true
-    }
+    
+    peripheral.writeValue(
+      Data([control.rawValue]),
+      for: controlChar,
+      type: .withResponse,
+    )
   }
 
   func stop() {
@@ -255,6 +241,21 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 }
 
 extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
+  func peripheral(
+    _ peripheral: any CBMPeripheral,
+    didWriteValueFor characteristic: CBMCharacteristic,
+    error: (any Error)?
+  ) {
+    guard
+      characteristic.uuid == GATT.control.cbuuid
+    else { return }
+    
+    if let terminationCompletion = self.terminationCompletion {
+      terminationCompletion()
+      self.terminationCompletion = nil
+    }
+  }
+  
   func peripheral(
     _ peripheral: CBMPeripheral,
     didDiscoverServices error: (any Error)?,
@@ -447,18 +448,11 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
       onPayloadReceived?(decryptedPayload)
 
-      transferQueue.add(priority: .high) {
-        guard peripheral.canSendWriteWithoutResponse
-        else { return false }
-
-        peripheral.writeValue(
-          Data([GATT.Control.done.rawValue]),
-          for: controlChar,
-          type: .withResponse,
-        )
-
-        return true
-      }
+      peripheral.writeValue(
+        Data([GATT.Control.done.rawValue]),
+        for: controlChar,
+        type: .withResponse,
+      )
 
     case GATT.control.cbuuid:
       guard

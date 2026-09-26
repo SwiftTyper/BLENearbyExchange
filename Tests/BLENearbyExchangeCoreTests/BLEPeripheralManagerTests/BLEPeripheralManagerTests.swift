@@ -10,6 +10,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
   func test_terminationDuringPayloadTransfer_terminateControlTakesPrecence() async throws {
     let peripheral = await makeSUT()
     peripheral.onSendProgress = { _ in }
+    peripheral.onError = { _ in }
 
     let peer = MockCentralSpy()
 
@@ -23,6 +24,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     peer.onControl = { control in
       XCTAssertEqual(control, .cancelled)
       terminateReceived.fulfill()
+      peer.spec.simulateDisconnection()
     }
 
     let terminateSent = expectation(description: "the terminate control was sent")

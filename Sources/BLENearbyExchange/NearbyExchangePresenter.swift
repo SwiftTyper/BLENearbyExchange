@@ -118,9 +118,8 @@ final class NearbyExchangePresenter {
 
     if case let .failure(error) = result, !(error is ExchangeError) {
       await session?.terminate(.cancelled)
+      await session?.stop()
     }
-
-    await session?.stop()
 
     isPresented = false
 

@@ -61,7 +61,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
     handshakeChar = CBMMutableCharacteristic(
       type: GATT.handshake.cbuuid,
-      properties: [.notify, .writeWithoutResponse],
+      properties: [.writeWithoutResponse, .notify],
       value: nil,
       permissions: [.writeable],
     )
@@ -114,11 +114,6 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
         for: controlChar,
         onSubscribedCentrals: nil,
       )
-
-      if result, terminationCompletion != nil {
-        completion()
-        self.terminationCompletion = nil
-      }
 
       return result
     }

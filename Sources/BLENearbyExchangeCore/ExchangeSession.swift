@@ -124,20 +124,20 @@ public final class ExchangeSession: TimeoutController {
 
     switch error {
     case .cancelledByPeer, .failedOnPeer, .disconnected:
-      break
+      self.stop()
 
     default:
-      notifyPeer(.failed)
+      notifyPeer(.failed) { [weak self] in self?.stop() }
     }
 
     events.send(.failed(error))
   }
 
-  private func notifyPeer(_ control: GATT.Control) {
+  private func notifyPeer(_ control: GATT.Control, completion: @escaping () -> Void) {
     switch role {
-    case .central: central?.sendTerminate(control) {}
-    case .peripheral: peripheral?.sendTerminate(control) {}
-    case nil: break
+    case .central: central?.sendTerminate(control, completion: completion)
+    case .peripheral: peripheral?.sendTerminate(control, completion: completion)
+    case nil: completion()
     }
   }
 
@@ -159,7 +159,6 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func terminate(_ control: GATT.Control) async {
-    // TODO:
     switch role {
     case .central:
       await withCheckedContinuation { continuation in
