@@ -471,7 +471,7 @@ extension ExchangeSessionTests {
         .startScanning(nonce: localNonce),
         .send(payload: localPayload),
         .confirmSent,
-        .stop
+        .stop,
       ],
     )
     XCTAssertEqual(
@@ -479,8 +479,8 @@ extension ExchangeSessionTests {
       [
         .startAdvertising(nonce: localNonce),
         .stop,
-        //second stop is from the end of transaction which stops everything including this even tho it stopped earlier
-        .stop
+        // second stop is from the end of transaction which stops everything including this even tho it stopped earlier
+        .stop,
       ],
     )
   }
