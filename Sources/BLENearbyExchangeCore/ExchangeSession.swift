@@ -182,7 +182,9 @@ public final class ExchangeSession: TimeoutController {
     ranger?.stop()
     peripheral?.stop()
     central?.stop()
-
+    
+    cancelTimer()
+    
     role = nil
     payload = Data()
     didPeerReceive = false

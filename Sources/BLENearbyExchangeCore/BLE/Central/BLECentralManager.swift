@@ -116,6 +116,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
+    communicationCipher = makeCipher()
 
     onPayloadReceived = nil
     onRoleReceived = nil
