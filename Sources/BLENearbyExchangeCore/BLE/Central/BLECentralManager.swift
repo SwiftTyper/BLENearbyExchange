@@ -73,24 +73,11 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
     transferQueue.clear()
 
-    transferQueue.add { [weak self] in
-      guard
-        let self,
-        peripheral.canSendWriteWithoutResponse
-      else { return false }
-
-      peripheral.writeValue(
-        Data([control.rawValue]),
-        for: controlChar,
-        type: .withResponse,
-      )
-
-      if terminationCompletion != nil {
-        completion()
-      }
-
-      return true
-    }
+    peripheral.writeValue(
+      Data([control.rawValue]),
+      for: controlChar,
+      type: .withResponse,
+    )
   }
 
   func stop() {
@@ -116,6 +103,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
+    communicationCipher = makeCipher()
 
     onPayloadReceived = nil
     onRoleReceived = nil
@@ -127,11 +115,14 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   }
 
   func send(payload: Data) {
-    guard
-      let peripheral,
-      let payloadChar,
-      let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+    guard let peripheral, let payloadChar
     else { return }
+
+    guard let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+    else {
+      onError?(.transferFailed("Couldn't encrypt the payload."))
+      return
+    }
 
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
 
@@ -250,6 +241,21 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 }
 
 extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
+  func peripheral(
+    _: any CBMPeripheral,
+    didWriteValueFor characteristic: CBMCharacteristic,
+    error _: (any Error)?,
+  ) {
+    guard
+      characteristic.uuid == GATT.control.cbuuid
+    else { return }
+
+    if let terminationCompletion {
+      terminationCompletion()
+      self.terminationCompletion = nil
+    }
+  }
+
   func peripheral(
     _ peripheral: CBMPeripheral,
     didDiscoverServices error: (any Error)?,
@@ -402,6 +408,8 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       guard let full = try? reassembler.add(frame: value)
       else { return }
 
+      reassembler.reset()
+
       guard
         let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
       else {
@@ -409,7 +417,12 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         return
       }
 
-      try? communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+      do {
+        try communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+      } catch {
+        onError?(.handshakeFailed("Couldn't establish the shared key."))
+        return
+      }
 
       do {
         try ranger.startRanging(peerToken: peerHandshakePayload.token)
@@ -422,26 +435,24 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
       onReceiveProgress?(reassembler.progress)
 
-      guard
-        let full,
-        let controlChar,
-        let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+      guard let full, let controlChar
       else { return }
 
-      onPayloadReceived?(decryptedPayload)
-
-      transferQueue.add {
-        guard peripheral.canSendWriteWithoutResponse
-        else { return false }
-
-        peripheral.writeValue(
-          Data([GATT.Control.done.rawValue]),
-          for: controlChar,
-          type: .withResponse,
-        )
-
-        return true
+      guard let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+      else {
+        onError?(.transferFailed("Couldn't decrypt the payload."))
+        return
       }
+
+      reassembler.reset()
+
+      peripheral.writeValue(
+        Data([GATT.Control.done.rawValue]),
+        for: controlChar,
+        type: .withResponse,
+      )
+
+      onPayloadReceived?(decryptedPayload)
 
     case GATT.control.cbuuid:
       guard

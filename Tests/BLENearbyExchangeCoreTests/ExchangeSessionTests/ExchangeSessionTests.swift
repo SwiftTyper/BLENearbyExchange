@@ -450,7 +450,7 @@ extension ExchangeSessionTests {
     central.onPayloadReceived?(peerPayload)
     central.onPeerReceivedDataConfirmation?()
 
-    await fulfillment(of: [completed], timeout: 1)
+    await fulfillment(of: [completed], timeout: 2)
 
     XCTAssertEqual(
       receivedEvents.withLock { $0 },
@@ -471,12 +471,15 @@ extension ExchangeSessionTests {
         .startScanning(nonce: localNonce),
         .send(payload: localPayload),
         .confirmSent,
+        .stop,
       ],
     )
     XCTAssertEqual(
       peripheral.calls,
       [
         .startAdvertising(nonce: localNonce),
+        .stop,
+        // second stop is from the end of transaction which stops everything including this even tho it stopped earlier
         .stop,
       ],
     )

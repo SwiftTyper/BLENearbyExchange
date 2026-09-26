@@ -29,6 +29,9 @@ final class NearbyExchangePresenter {
   }
 
   func run(payload: Data) async throws -> Data {
+    guard !isPresented else { throw NearbyExchangeAction.Failure.busy }
+    isPresented = true
+
     let session: ExchangeSession
     if let existing = self.session {
       session = existing
@@ -37,9 +40,6 @@ final class NearbyExchangePresenter {
       self.session = session
     }
 
-    guard !isPresented else { throw NearbyExchangeAction.Failure.busy }
-
-    isPresented = true
     received = nil
     phase = .searching
 
@@ -78,7 +78,7 @@ final class NearbyExchangePresenter {
 
     switch event {
     case .connected:
-      guard phase == .searching else { return }
+      guard case .searching = phase else { return }
       phase = .approaching(distance: nil)
 
     case let .distance(distance):
@@ -118,9 +118,8 @@ final class NearbyExchangePresenter {
 
     if case let .failure(error) = result, !(error is ExchangeError) {
       await session?.terminate(.cancelled)
+      await session?.stop()
     }
-
-    await session?.stop()
 
     isPresented = false
 
