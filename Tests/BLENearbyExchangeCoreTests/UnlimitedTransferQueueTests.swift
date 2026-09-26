@@ -50,18 +50,18 @@ struct UnlimitedTransferQueueTests {
 
     #expect(link.delivered == ["first", "second", "third"])
   }
-  
+
   @Test func highestPriorityWorkGetsExecutedFirst() {
     let queue = UnlimitedTransferQueue()
     let link = LinkSpy(onReady: queue.resume)
     link.isReady = false
-    
+
     queue.add(value: link.transfer("second"))
     queue.add(priority: .high, value: link.transfer("first"))
     queue.add(value: link.transfer("third"))
-    
+
     link.isReady = true
-    
+
     #expect(link.delivered == ["first", "second", "third"])
   }
 
@@ -111,17 +111,19 @@ struct UnlimitedTransferQueueTests {
 private final class LinkSpy {
   var isReady = true {
     didSet {
-      if self.isReady { onReady() }
+      if isReady {
+        onReady()
+      }
     }
   }
-  
+
   private(set) var delivered: [String] = []
   private var onReady: () -> Void
-  
+
   init(onReady: @escaping () -> Void = {}) {
     self.onReady = onReady
   }
-  
+
   func transfer(_ id: String) -> UnlimitedTransferQueue.Transfer {
     {
       guard self.isReady else { return false }

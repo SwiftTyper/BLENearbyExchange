@@ -72,7 +72,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     terminationCompletion = completion
 
     transferQueue.clear()
-    
+
     peripheral.writeValue(
       Data([control.rawValue]),
       for: controlChar,
@@ -242,20 +242,20 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 
 extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   func peripheral(
-    _ peripheral: any CBMPeripheral,
+    _: any CBMPeripheral,
     didWriteValueFor characteristic: CBMCharacteristic,
-    error: (any Error)?
+    error _: (any Error)?,
   ) {
     guard
       characteristic.uuid == GATT.control.cbuuid
     else { return }
-    
-    if let terminationCompletion = self.terminationCompletion {
+
+    if let terminationCompletion {
       terminationCompletion()
       self.terminationCompletion = nil
     }
   }
-  
+
   func peripheral(
     _ peripheral: CBMPeripheral,
     didDiscoverServices error: (any Error)?,
@@ -407,7 +407,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     case GATT.handshake.cbuuid:
       guard let full = try? reassembler.add(frame: value)
       else { return }
-      
+
       reassembler.reset()
 
       guard
@@ -443,7 +443,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         onError?(.transferFailed("Couldn't decrypt the payload."))
         return
       }
-      
+
       reassembler.reset()
 
       onPayloadReceived?(decryptedPayload)

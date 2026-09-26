@@ -124,7 +124,7 @@ public final class ExchangeSession: TimeoutController {
 
     switch error {
     case .cancelledByPeer, .failedOnPeer, .disconnected:
-      self.stop()
+      stop()
 
     default:
       notifyPeer(.failed) { [weak self] in self?.stop() }
@@ -181,9 +181,9 @@ public final class ExchangeSession: TimeoutController {
     ranger?.stop()
     peripheral?.stop()
     central?.stop()
-    
+
     cancelTimer()
-    
+
     role = nil
     payload = Data()
     didPeerReceive = false

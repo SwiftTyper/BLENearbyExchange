@@ -109,13 +109,11 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     transferQueue.add(priority: .high) { [weak self] in
       guard let self else { return false }
 
-      let result = manager.updateValue(
+      return manager.updateValue(
         Data([control.rawValue]),
         for: controlChar,
         onSubscribedCentrals: nil,
       )
-
-      return result
     }
   }
 
@@ -280,7 +278,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let value = request.value,
           let full = try? reassembler.add(frame: value)
         else { return }
-        
+
         reassembler.reset()
 
         guard
@@ -351,9 +349,9 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           onError?(.transferFailed("Couldn't decrypt the payload."))
           return
         }
-        
+
         reassembler.reset()
-        
+
         transferQueue.add(priority: .high) { [weak self] in
           guard let self else { return false }
 

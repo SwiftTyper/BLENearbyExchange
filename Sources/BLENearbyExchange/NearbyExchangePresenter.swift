@@ -31,7 +31,7 @@ final class NearbyExchangePresenter {
   func run(payload: Data) async throws -> Data {
     guard !isPresented else { throw NearbyExchangeAction.Failure.busy }
     isPresented = true
-    
+
     let session: ExchangeSession
     if let existing = self.session {
       session = existing

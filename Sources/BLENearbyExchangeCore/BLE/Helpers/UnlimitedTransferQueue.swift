@@ -3,14 +3,14 @@ import Foundation
 @BLEActor
 class UnlimitedTransferQueue {
   typealias Transfer = () -> Bool
-  
-  public enum Priority {
+
+  enum Priority {
     case regular
     case high
   }
 
   private var fifo: [(Transfer, Priority)] = []
-  
+
   init() {}
 
   func clear() {
