@@ -321,6 +321,6 @@ public final class ExchangeSession: TimeoutController {
     guard didPeerReceive, didReceive, !didComplete else { return }
     didComplete = true
     events.send(.completed)
-    self.stop()
+    stop()
   }
 }

@@ -445,7 +445,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       }
 
       reassembler.reset()
-      
+
       peripheral.writeValue(
         Data([GATT.Control.done.rawValue]),
         for: controlChar,
@@ -454,7 +454,6 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
       onPayloadReceived?(decryptedPayload)
 
-      
     case GATT.control.cbuuid:
       guard
         let raw = value.first,
