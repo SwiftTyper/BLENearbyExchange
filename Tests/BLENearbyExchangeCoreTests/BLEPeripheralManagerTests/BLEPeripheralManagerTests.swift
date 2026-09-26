@@ -1,6 +1,7 @@
 @testable import BLENearbyExchangeCore
 import CoreBluetooth
 import CoreBluetoothMock
+import CryptoKit
 import Foundation
 import XCTest
 
@@ -8,6 +9,8 @@ import XCTest
 final class BLEPeripheralManagerTests: XCTestCase {
   func test_terminationDuringPayloadTransfer_terminateControlTakesPrecence() async throws {
     let peripheral = await makeSUT()
+    peripheral.onSendProgress = { _ in }
+
     let peer = MockCentralSpy()
 
     try await connect(peer, to: peripheral)
@@ -46,6 +49,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
   func test_send_transfersFullPayloadToPeer() async throws {
     let peripheral = await makeSUT()
+    peripheral.onSendProgress = { _ in }
+
     let peer = MockCentralSpy()
 
     try await connect(peer, to: peripheral)
@@ -84,6 +89,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
   func test_centralSends_peripheralReceivesFullPayload() async throws {
     let peripheral = await makeSUT()
+    peripheral.onReceiveProgress = { _ in }
+
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
@@ -146,6 +153,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
   func test_peripheralsPayloadOutgoingQueueFull_doesntDropOtherOutgoingCommands() async throws {
     let peripheral = await makeSUT()
+
+    peripheral.onReceiveProgress = { _ in }
+
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
@@ -156,9 +166,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     let transferStarted = expectation(description: "the peripheral's update queue is full")
 
-    peripheral.onSendProgress = { progress in
+    peripheral.onSendProgress = { [weak peripheral] progress in
       guard progress.bytes > 0, progress.bytes < outgoingPayload.count else { return }
-      peripheral.onSendProgress = nil
+      peripheral?.onSendProgress = nil
       transferStarted.fulfill()
     }
 
@@ -167,7 +177,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     await fulfillment(of: [transferStarted], timeout: 2.0)
 
     // this is significatly smaller than the outgoing payload so
-    // that it finished way earlier and we try to send done during the outgoing payload transfer
+    // that it finished way earlier and so the peripheral tries to send done during the outgoing payload transfer
     let incomingPayload = Data(repeating: 0x01, count: 100)
 
     for chunk in Chunker.chunk(incomingPayload, mtu: peer.spec.maximumUpdateValueLength) {
@@ -264,28 +274,38 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let characterisitcs = try await connect(peer, to: peripheral)
     let handshakeChar = try characterisitcs.find(by: GATT.handshake.cbuuid)
 
-    let peerTokenSent = expectation(description: "peer token sent")
     let peerTokenData = Data("peer-token".utf8)
+    let publicKey = P384.KeyAgreement.PrivateKey().publicKey
+    let handshake = HandshakePayload(
+      publicKey: publicKey.rawRepresentation,
+      token: peerTokenData,
+    )
+    let peerHandshakeData = try JSONEncoder().encode(handshake)
+    let lessThanMaxFrameSize = 20
 
-    peer.spec.simulateWriteRequest(
-      peerTokenData,
-      for: handshakeChar,
-      withResponse: true,
-    ) { result in
-      switch result {
-      case .success:
-        peerTokenSent.fulfill()
+    for chunk in Chunker.chunk(peerHandshakeData, mtu: lessThanMaxFrameSize) {
+      peer.spec.simulateWriteRequest(
+        chunk,
+        for: handshakeChar,
+        withResponse: false,
+      ) { result in
+        switch result {
+        case .success:
+          break
 
-      case let .failure(error):
-        XCTFail("\(error.localizedDescription)")
+        case let .failure(error):
+          XCTFail("\(error.localizedDescription)")
+        }
       }
     }
 
     let centralReceivedToken = expectation(description: "central received token")
 
-    peer.onHandshake = { receivedPeripheralTokenData in
+    peer.onHandshake = { receivedPeripheralHandshakeData in
+      let payload = try? JSONDecoder().decode(HandshakePayload.self, from: receivedPeripheralHandshakeData)
+      XCTAssertNotNil(payload)
       centralReceivedToken.fulfill()
-      XCTAssertEqual(peripheralTokenData, receivedPeripheralTokenData)
+      XCTAssertEqual(peripheralTokenData, payload?.token)
     }
 
     let peerTokenReceived = expectation(description: "peer token received")
@@ -295,7 +315,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       XCTAssertEqual(receivedTokenData, peerTokenData)
     }
 
-    await fulfillment(of: [peerTokenSent, centralReceivedToken, peerTokenReceived], timeout: 2.0)
+    await fulfillment(of: [centralReceivedToken, peerTokenReceived], timeout: 1.0)
   }
 }
 
@@ -311,10 +331,12 @@ extension BLEPeripheralManagerTests {
     let peripheral = BLEPeripheralManager(
       configuration: .init(),
       ranger: ranger,
+      makeCipher: { PlainTextCipher() },
       forceMock: true,
     )
 
     trackForMemoryLeaks(instance: peripheral, file: file, line: line)
+    peripheral.failOnUnexpectedUse(file: file, line: line)
 
     let poweredOn = expectation(description: "the manager powered on")
 

@@ -1,4 +1,5 @@
 import CoreBluetoothMock
+import CryptoKit
 import Foundation
 
 @BLEActor
@@ -27,6 +28,8 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private var sentBytes = 0
   private var payloadBytes = 0
   private var reassembler = Reassembler()
+  private var communicationCipher: any MessageCipherInterface?
+  private var makeCipher: () -> any MessageCipherInterface
 
   private var centralSubscribedCharacteristics: Set<String> = []
   private var terminationCompletion: (() -> Void)?
@@ -35,10 +38,13 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   init(
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
+    makeCipher: @escaping () -> any MessageCipherInterface = { MessageCipher() },
     forceMock: Bool,
   ) {
     self.configuration = configuration
     self.ranger = ranger
+    self.makeCipher = makeCipher
+    communicationCipher = makeCipher()
 
     super.init()
 
@@ -55,7 +61,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
     handshakeChar = CBMMutableCharacteristic(
       type: GATT.handshake.cbuuid,
-      properties: [.notify, .write],
+      properties: [.notify, .writeWithoutResponse],
       value: nil,
       permissions: [.writeable],
     )
@@ -140,6 +146,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
+    communicationCipher = makeCipher()
 
     onPayloadReceived = nil
     onRoleConfirmed = nil
@@ -151,13 +158,15 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   }
 
   func send(payload: Data) {
-    guard let mtu = subscribedCentral?.maximumUpdateValueLength
+    guard
+      let mtu = subscribedCentral?.maximumUpdateValueLength,
+      let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
     else { return }
 
     sentBytes = 0
-    payloadBytes = payload.count
+    payloadBytes = encryptedPayload.count
 
-    for chunk in Chunker.chunk(payload, mtu: mtu) {
+    for chunk in Chunker.chunk(encryptedPayload, mtu: mtu) {
       transferQueue.add { [weak self] in
         guard let self else { return false }
 
@@ -267,47 +276,70 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
     for request in requests {
       switch request.characteristic.uuid {
       case GATT.handshake.cbuuid:
-        guard let peerToken = request.value
+        guard
+          let value = request.value,
+          let full = try? reassembler.add(frame: value)
+        else { return }
+
+        guard
+          let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
         else {
-          peripheral.respond(to: request, withResult: .invalidAttributeValueLength)
           onError?(.handshakeFailed("No peer discovery token."))
-          continue
+          return
         }
 
-        guard let localToken = ranger.localDiscoveryToken()
+        guard
+          let localToken = ranger.localDiscoveryToken(),
+          let communicationCipher
         else {
-          peripheral.respond(to: request, withResult: .unlikelyError)
           onError?(.rangingFailed("No local discovery token."))
-          continue
+          return
         }
 
-        peripheral.respond(to: request, withResult: .success)
+        let handshakePayload = HandshakePayload(
+          publicKey: communicationCipher.localPublicKey.rawRepresentation,
+          token: localToken,
+        )
 
-        transferQueue.add { [weak self] in
-          guard let self else { return false }
+        guard
+          let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),
+          let mtu = subscribedCentral?.maximumUpdateValueLength
+        else {
+          onError?(.handshakeFailed("Encoding handshake payload failed"))
+          return
+        }
 
-          return peripheral.updateValue(
-            localToken,
-            for: handshakeChar,
-            onSubscribedCentrals: nil,
-          )
+        for chunk in Chunker.chunk(handshakePayloadData, mtu: mtu) {
+          transferQueue.add { [weak self] in
+            guard let self else { return false }
+
+            return peripheral.updateValue(
+              chunk,
+              for: handshakeChar,
+              onSubscribedCentrals: nil,
+            )
+          }
         }
 
         do {
-          try ranger.startRanging(peerToken: peerToken)
+          try ranger.startRanging(peerToken: peerHandshakePayload.token)
         } catch {
           onError?(.rangingFailed(error.localizedDescription))
         }
 
+        try? self.communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+
       case GATT.payload.cbuuid:
         guard let value = request.value
-        else { continue }
+        else { return }
 
         let full = try? reassembler.add(frame: value)
         onReceiveProgress?(reassembler.progress)
 
-        guard let full
-        else { continue }
+        guard
+          let full,
+          let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+        else { return }
 
         transferQueue.add { [weak self] in
           guard let self else { return false }
@@ -319,7 +351,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           )
         }
 
-        onPayloadReceived?(full)
+        onPayloadReceived?(decryptedPayload)
 
       case GATT.control.cbuuid:
         guard
@@ -327,7 +359,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let control = GATT.Control(rawValue: raw)
         else {
           peripheral.respond(to: request, withResult: .invalidAttributeValueLength)
-          continue
+          return
         }
 
         peripheral.respond(to: request, withResult: .success)
@@ -344,7 +376,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         }
 
       default:
-        continue
+        return
       }
     }
   }

@@ -7,6 +7,7 @@ import Synchronization
 final class MockCentralSpy {
   private(set) var spec: CBMCentralSpec!
   private let state = Mutex<[Update]>([])
+  private var reassembler: Reassembler = .init()
 
   enum Update: Equatable {
     case payload(Data)
@@ -52,7 +53,10 @@ extension MockCentralSpy: @BLEActor CBMCentralSpecDelegate {
       onControl?(control)
 
     case GATT.handshake.cbuuid:
-      onHandshake?(value)
+      guard let full = try? reassembler.add(frame: value)
+      else { return }
+
+      onHandshake?(full)
 
     default:
       break

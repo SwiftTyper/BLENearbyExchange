@@ -1,6 +1,7 @@
 @testable import BLENearbyExchangeCore
 import CoreBluetooth
 import CoreBluetoothMock
+import CryptoKit
 import Foundation
 import XCTest
 
@@ -85,29 +86,43 @@ final class BLECentralManagerTests: XCTestCase {
 }
 
 extension BLECentralManagerTests {
-  func test_receivingPeersTokenStartsNIRanging() async {
+  func test_receivingPeersTokenStartsNIRanging() async throws {
     let peer = MockPeripheralSpy(nonce: 1)
 
-    let localToken = Data("local-token".utf8)
-    let ranger = MockRanger(localToken: localToken)
-
+    let centralTokenData = Data("local-token".utf8)
+    let ranger = MockRanger(localToken: centralTokenData)
     let central = await makeSUT(peer: peer, ranger: ranger)
+
+    central.onRoleReceived = { _ in }
+
+    let peerReceivedHandshake = expectation(description: "peer received handshake")
+
+    peer.onHandshake = { receivedCentralHandshakeData in
+      let payload = try? JSONDecoder().decode(HandshakePayload.self, from: receivedCentralHandshakeData)
+      XCTAssertNotNil(payload)
+      XCTAssertEqual(centralTokenData, payload?.token)
+      peerReceivedHandshake.fulfill()
+    }
 
     await connect(central, nonce: 2)
 
-    XCTAssertEqual(peer.handshakeToken, localToken)
-
-    let peerToken = Data("peer-token".utf8)
+    let peerTokenData = Data("peer-token".utf8)
+    let publicKey = P384.KeyAgreement.PrivateKey().publicKey
+    let handshake = HandshakePayload(
+      publicKey: publicKey.rawRepresentation,
+      token: peerTokenData,
+    )
+    let peerHandshakeData = try JSONEncoder().encode(handshake)
     let rangingStarted = expectation(description: "ranging started")
 
     ranger.onStartRanging = { token in
-      XCTAssertEqual(token, peerToken)
+      XCTAssertEqual(token, peerTokenData)
       rangingStarted.fulfill()
     }
 
-    peer.notify(peerToken, on: GATT.handshake)
+    peer.send(payload: peerHandshakeData, on: GATT.handshake)
 
-    await fulfillment(of: [rangingStarted], timeout: 2)
+    await fulfillment(of: [peerReceivedHandshake, rangingStarted], timeout: 2)
   }
 
   func test_failureToCreateNITokenFailsHandshake() async {
@@ -117,6 +132,8 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer, ranger: ranger)
 
+    central.onRoleReceived = { _ in }
+
     let handshakeFailed = expectation(description: "the handshake failed")
 
     central.onError = { error in
@@ -124,19 +141,26 @@ extension BLECentralManagerTests {
       handshakeFailed.fulfill()
     }
 
+    let peerHandshakeNotReceived = expectation(description: "peer didn't receive handshake")
+    peerHandshakeNotReceived.isInverted = true
+
+    peer.onHandshake = { _ in
+      peerHandshakeNotReceived.fulfill()
+    }
+
     central.startScanning(nonce: 2)
 
-    await fulfillment(of: [handshakeFailed], timeout: 2)
-
-    XCTAssertNil(peer.handshakeToken)
+    await fulfillment(of: [handshakeFailed, peerHandshakeNotReceived], timeout: 1)
   }
 
-  func test_localRangingFailureIsReported() async {
+  func test_localRangingFailureIsReported() async throws {
     let peer = MockPeripheralSpy(nonce: 1)
     let ranger = MockRanger()
     ranger.rangingError = MockRanger.Failure.rangingUnavailable
 
     let central = await makeSUT(peer: peer, ranger: ranger)
+
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -150,7 +174,15 @@ extension BLECentralManagerTests {
       rangingFailed.fulfill()
     }
 
-    peer.notify(Data("peer-token".utf8), on: GATT.handshake)
+    let peerTokenData = Data("peer-token".utf8)
+    let publicKey = P384.KeyAgreement.PrivateKey().publicKey
+    let handshake = HandshakePayload(
+      publicKey: publicKey.rawRepresentation,
+      token: peerTokenData,
+    )
+    let peerHandshakeData = try JSONEncoder().encode(handshake)
+
+    peer.send(payload: peerHandshakeData, on: GATT.handshake)
 
     await fulfillment(of: [rangingFailed], timeout: 2)
   }
@@ -161,6 +193,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -192,6 +226,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -233,6 +269,8 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
+    central.onRoleReceived = { _ in }
+
     await connect(central, nonce: 2)
 
     let receiptConfirmed = expectation(description: "the peer confirmed receipt")
@@ -253,6 +291,8 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
+    central.onRoleReceived = { _ in }
+
     await connect(central, nonce: 2)
 
     let exchangeFailed = expectation(description: "the exchange failed")
@@ -271,6 +311,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -291,6 +333,8 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
+    central.onRoleReceived = { _ in }
+
     await connect(central, nonce: 2)
 
     let terminateSent = expectation(description: "the terminate control was written")
@@ -308,6 +352,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -327,6 +373,8 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
+
+    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -359,10 +407,12 @@ extension BLECentralManagerTests {
     let central = BLECentralManager(
       configuration: .init(),
       ranger: ranger,
+      makeCipher: { PlainTextCipher() },
       forceMock: true,
     )
 
     trackForMemoryLeaks(instance: central, file: file, line: line)
+    central.failOnUnexpectedUse(file: file, line: line)
 
     let poweredOn = expectation(description: "the manager powered on")
 

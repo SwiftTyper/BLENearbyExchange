@@ -1,5 +1,6 @@
 import CoreBluetooth
 import CoreBluetoothMock
+import CryptoKit
 import Foundation
 
 @BLEActor
@@ -29,14 +30,19 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   private var payloadBytes = 0
   private var reassembler = Reassembler()
   private let transferQueue: UnlimitedTransferQueue = .init()
+  private var communicationCipher: MessageCipherInterface?
+  private var makeCipher: () -> any MessageCipherInterface
 
   init(
     configuration: NearbyExchange.Configuration,
     ranger: ProximityRanger,
+    makeCipher: @escaping () -> any MessageCipherInterface = { MessageCipher() },
     forceMock: Bool = false,
   ) {
     self.configuration = configuration
     self.ranger = ranger
+    self.makeCipher = makeCipher
+    communicationCipher = makeCipher()
 
     super.init()
 
@@ -123,15 +129,16 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   func send(payload: Data) {
     guard
       let peripheral,
-      let payloadChar
+      let payloadChar,
+      let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
     else { return }
 
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
 
     sentBytes = 0
-    payloadBytes = payload.count
+    payloadBytes = encryptedPayload.count
 
-    for chunk in Chunker.chunk(payload, mtu: mtu) {
+    for chunk in Chunker.chunk(encryptedPayload, mtu: mtu) {
       transferQueue.add { [weak self] in
         guard
           let self,
@@ -335,25 +342,43 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       let handshakeChar
     else { return }
 
-    guard let token = ranger.localDiscoveryToken()
+    guard
+      let token = ranger.localDiscoveryToken(),
+      let communicationCipher
     else {
       onError?(.rangingFailed("No local discovery token."))
       return
     }
 
-    transferQueue.add { [weak self] in
-      guard
-        let self,
-        peripheral?.canSendWriteWithoutResponse == true
-      else { return false }
+    let handshakePayload = HandshakePayload(
+      publicKey: communicationCipher.localPublicKey.rawRepresentation,
+      token: token,
+    )
 
-      peripheral?.writeValue(
-        token,
-        for: handshakeChar,
-        type: .withResponse,
-      )
+    guard
+      let handshakePayloadData = try? JSONEncoder().encode(handshakePayload),
+      let mtu = peripheral?.maximumWriteValueLength(for: .withoutResponse)
+    else {
+      // TODO:
+      onError?(.disconnected)
+      return
+    }
 
-      return true
+    for chunk in Chunker.chunk(handshakePayloadData, mtu: mtu) {
+      transferQueue.add { [weak self] in
+        guard
+          let self,
+          peripheral?.canSendWriteWithoutResponse == true
+        else { return false }
+
+        peripheral?.writeValue(
+          chunk,
+          for: handshakeChar,
+          type: .withoutResponse,
+        )
+
+        return true
+      }
     }
 
     onConnected?()
@@ -374,20 +399,36 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     switch characteristic.uuid {
     case GATT.handshake.cbuuid:
+      guard let full = try? reassembler.add(frame: value)
+      else { return }
+
+      guard
+        let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
+      else {
+        onError?(.handshakeFailed("couldn't decode handshake payload"))
+        return
+      }
+
+      try? communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+
       do {
-        try ranger.startRanging(peerToken: value)
+        try ranger.startRanging(peerToken: peerHandshakePayload.token)
       } catch {
         onError?(.rangingFailed(error.localizedDescription))
       }
 
     case GATT.payload.cbuuid:
       let full = try? reassembler.add(frame: value)
+
       onReceiveProgress?(reassembler.progress)
 
-      guard let full, let controlChar
+      guard
+        let full,
+        let controlChar,
+        let decryptedPayload = try? communicationCipher?.decrypt(data: full)
       else { return }
 
-      onPayloadReceived?(full)
+      onPayloadReceived?(decryptedPayload)
 
       transferQueue.add {
         guard peripheral.canSendWriteWithoutResponse

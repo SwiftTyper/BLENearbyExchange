@@ -33,7 +33,7 @@ WindowGroup {
 
 ## To Do
 - [ ] Play around with Bluetooth Channel Sounding
-- [ ] Encrypt Traffic
+- [x] Encrypt Traffic
 - [x] Mock BLE for units
 - [ ] Handle 3+ potential devices in proximity
 - [ ] Add L2CAP support
