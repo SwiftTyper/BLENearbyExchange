@@ -280,6 +280,8 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let value = request.value,
           let full = try? reassembler.add(frame: value)
         else { return }
+        
+        reassembler.reset()
 
         guard
           let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
@@ -340,7 +342,9 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           let full,
           let decryptedPayload = try? communicationCipher?.decrypt(data: full)
         else { return }
-
+        
+        reassembler.reset()
+        
         transferQueue.add { [weak self] in
           guard let self else { return false }
 

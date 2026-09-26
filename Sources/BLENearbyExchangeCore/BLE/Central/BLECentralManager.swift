@@ -401,6 +401,8 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     case GATT.handshake.cbuuid:
       guard let full = try? reassembler.add(frame: value)
       else { return }
+      
+      reassembler.reset()
 
       guard
         let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
@@ -427,6 +429,8 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         let controlChar,
         let decryptedPayload = try? communicationCipher?.decrypt(data: full)
       else { return }
+      
+      reassembler.reset()
 
       onPayloadReceived?(decryptedPayload)
 
