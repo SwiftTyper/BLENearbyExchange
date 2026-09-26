@@ -158,10 +158,14 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   }
 
   func send(payload: Data) {
-    guard
-      let mtu = subscribedCentral?.maximumUpdateValueLength,
-      let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+    guard let mtu = subscribedCentral?.maximumUpdateValueLength
     else { return }
+
+    guard let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+    else {
+      onError?(.transferFailed("Couldn't encrypt the payload."))
+      return
+    }
 
     sentBytes = 0
     payloadBytes = encryptedPayload.count
@@ -329,7 +333,12 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
           onError?(.rangingFailed(error.localizedDescription))
         }
 
-        try? self.communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+        do {
+          try self.communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+        } catch {
+          onError?(.handshakeFailed("Couldn't establish the shared key."))
+          continue
+        }
 
       case GATT.payload.cbuuid:
         guard let value = request.value
@@ -338,10 +347,14 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
         let full = try? reassembler.add(frame: value)
         onReceiveProgress?(reassembler.progress)
 
-        guard
-          let full,
-          let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+        guard let full
         else { return }
+
+        guard let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+        else {
+          onError?(.transferFailed("Couldn't decrypt the payload."))
+          return
+        }
         
         reassembler.reset()
         

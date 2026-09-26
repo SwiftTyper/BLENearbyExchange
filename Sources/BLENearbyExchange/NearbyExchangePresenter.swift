@@ -78,7 +78,7 @@ final class NearbyExchangePresenter {
 
     switch event {
     case .connected:
-      guard phase == .searching else { return }
+      guard case .searching = phase else { return }
       phase = .approaching(distance: nil)
 
     case let .distance(distance):

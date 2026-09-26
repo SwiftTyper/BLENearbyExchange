@@ -128,11 +128,14 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   }
 
   func send(payload: Data) {
-    guard
-      let peripheral,
-      let payloadChar,
-      let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+    guard let peripheral, let payloadChar
     else { return }
+
+    guard let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+    else {
+      onError?(.transferFailed("Couldn't encrypt the payload."))
+      return
+    }
 
     let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
 
@@ -412,7 +415,12 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
         return
       }
 
-      try? communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+      do {
+        try communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+      } catch {
+        onError?(.handshakeFailed("Couldn't establish the shared key."))
+        return
+      }
 
       do {
         try ranger.startRanging(peerToken: peerHandshakePayload.token)
@@ -425,11 +433,14 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
       onReceiveProgress?(reassembler.progress)
 
-      guard
-        let full,
-        let controlChar,
-        let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+      guard let full, let controlChar
       else { return }
+
+      guard let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+      else {
+        onError?(.transferFailed("Couldn't decrypt the payload."))
+        return
+      }
       
       reassembler.reset()
 
