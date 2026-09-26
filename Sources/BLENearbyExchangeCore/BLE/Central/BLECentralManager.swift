@@ -87,6 +87,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
       if terminationCompletion != nil {
         completion()
+        self.terminationCompletion = nil
       }
 
       return true

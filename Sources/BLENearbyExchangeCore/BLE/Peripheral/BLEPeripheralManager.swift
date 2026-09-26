@@ -117,6 +117,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
       if result, terminationCompletion != nil {
         completion()
+        self.terminationCompletion = nil
       }
 
       return result
