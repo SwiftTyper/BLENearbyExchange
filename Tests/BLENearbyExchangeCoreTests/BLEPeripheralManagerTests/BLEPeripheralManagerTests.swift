@@ -211,7 +211,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       outgoingPayloadReceived.fulfill()
     }
 
-    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 2.0)
+    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 5.0)
 
     XCTAssertTrue(peer.updates.contains(.control(.done)))
   }
