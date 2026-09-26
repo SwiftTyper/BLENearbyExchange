@@ -93,8 +93,8 @@ private struct Frame {
 
   init(_ data: Data) {
     let bytes = [UInt8](data)
-    index = Int(bytes[0]) << 8 | Int(bytes[1])
-    total = Int(bytes[2]) << 8 | Int(bytes[3])
+    index = Int(data.readBigEndianUInt32(at: 0))
+    total = Int(data.readBigEndianUInt32(at: 4))
     body = Data(bytes.dropFirst(Chunker.headerSize))
   }
 }

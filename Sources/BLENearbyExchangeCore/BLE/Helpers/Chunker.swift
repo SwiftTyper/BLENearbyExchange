@@ -5,18 +5,18 @@ import Foundation
 /// the whole payload, since GATT delivers discrete packets with no message
 /// framing of its own.
 enum Chunker {
-  static let headerSize = 4
+  static let headerSize = 8
 
   static func chunk(_ payload: Data, mtu: Int) -> [Data] {
     let chunkSize = max(1, mtu - headerSize)
     let chunks = stride(from: 0, to: max(payload.count, 1), by: chunkSize).map {
       payload.subdata(in: $0 ..< min($0 + chunkSize, payload.count))
     }
-    let total = UInt16(chunks.count)
+    let total = UInt32(chunks.count)
     return chunks.enumerated().map { index, chunk in
       var frame = Data()
-      frame.append(bigEndian: UInt16(index))
-      frame.append(bigEndian: total)
+      frame.append(bigEndian: UInt32(index))
+      frame.append(bigEndian: UInt32(total))
       frame.append(chunk)
       return frame
     }
@@ -24,7 +24,7 @@ enum Chunker {
 }
 
 private extension Data {
-  mutating func append(bigEndian value: UInt16) {
+  mutating func append(bigEndian value: UInt32) {
     Swift.withUnsafeBytes(of: value.bigEndian) { append(contentsOf: $0) }
   }
 }
