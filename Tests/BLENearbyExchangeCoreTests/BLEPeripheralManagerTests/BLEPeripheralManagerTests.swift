@@ -307,7 +307,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     peer.spec.simulateWriteRequest(
       Data([GATT.Control.failed.rawValue]),
-      for: controlCharacteristic
+      for: controlCharacteristic,
     ) { result in
       switch result {
       case .success:
