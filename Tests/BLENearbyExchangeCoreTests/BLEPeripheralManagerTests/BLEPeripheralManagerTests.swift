@@ -102,15 +102,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let chunks = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength)
 
     for chunk in chunks {
-      peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
-        switch result {
-        case .success:
-          break
-
-        case .failure:
-          XCTFail("Failed to queue write request")
-        }
-      }
+      peer.spec.simulateWriteRequestWithoutResponse(chunk, for: payloadChar)
     }
 
     let payloadReceived = expectation(description: "full payload received")
@@ -134,7 +126,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     let doneCommend = Data([GATT.Control.done.rawValue])
 
-    peer.spec.simulateWriteRequest(doneCommend, for: controlChar, withResponse: true) { result in
+    peer.spec.simulateWriteRequest(doneCommend, for: controlChar) { result in
       switch result {
       case .success:
         doneCommendSent.fulfill()
@@ -183,11 +175,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let incomingPayload = Data(repeating: 0x01, count: 100)
 
     for chunk in Chunker.chunk(incomingPayload, mtu: peer.spec.maximumUpdateValueLength) {
-      peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
-        if case let .failure(failure) = result {
-          XCTFail("\(failure.localizedDescription)")
-        }
-      }
+      peer.spec.simulateWriteRequestWithoutResponse(chunk, for: payloadChar)
     }
 
     let payloadReceived = expectation(description: "the peripheral received the incoming payload")
@@ -244,11 +232,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let incomingPayload = Data(repeating: 0x01, count: 100)
 
     for chunk in Chunker.chunk(incomingPayload, mtu: peer.spec.maximumUpdateValueLength) {
-      peer.spec.simulateWriteRequest(chunk, for: payloadChar, withResponse: false) { result in
-        if case let .failure(failure) = result {
-          XCTFail("\(failure.localizedDescription)")
-        }
-      }
+      peer.spec.simulateWriteRequestWithoutResponse(chunk, for: payloadChar)
     }
 
     let payloadReceived = expectation(description: "the peripheral received the incoming payload")
@@ -323,8 +307,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     peer.spec.simulateWriteRequest(
       Data([GATT.Control.failed.rawValue]),
-      for: controlCharacteristic,
-      withResponse: true,
+      for: controlCharacteristic
     ) { result in
       switch result {
       case .success:
@@ -357,19 +340,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let lessThanMaxFrameSize = 20
 
     for chunk in Chunker.chunk(peerHandshakeData, mtu: lessThanMaxFrameSize) {
-      peer.spec.simulateWriteRequest(
-        chunk,
-        for: handshakeChar,
-        withResponse: false,
-      ) { result in
-        switch result {
-        case .success:
-          break
-
-        case let .failure(error):
-          XCTFail("\(error.localizedDescription)")
-        }
-      }
+      peer.spec.simulateWriteRequestWithoutResponse(chunk, for: handshakeChar)
     }
 
     let centralReceivedToken = expectation(description: "central received token")

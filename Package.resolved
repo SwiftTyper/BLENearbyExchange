@@ -1,5 +1,5 @@
 {
-  "originHash" : "a638bb018945900ee751db61f0332a295d05858277435ff0375cac19337712e3",
+  "originHash" : "6ac12f6aef3e1b38d0bdf3917341ce775da3bc5321e76f3ac1af05da14f25170",
   "pins" : [
     {
       "identity" : "ios-corebluetooth-mock",
@@ -7,7 +7,7 @@
       "location" : "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
       "state" : {
         "branch" : "feature/peripheral-manager-support",
-        "revision" : "7d34f318596d3c1209195fb5ecd2d6fce505b719"
+        "revision" : "d126c3ee60153c6b5f4b73b74e225ee9b0421c9c"
       }
     },
     {
