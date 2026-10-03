@@ -2,8 +2,7 @@
 
 [![CI](https://github.com/SwiftTyper/BLENearbyExchange/actions/workflows/CI.yml/badge.svg)](https://github.com/SwiftTyper/BLENearbyExchange/actions/workflows/CI.yml)
 
-a simple proximity based BLE exchange where each device sends and receives a data payload (originally inspired by Apple's tap to exchange contact info functionality)
-
+A BLE based proximity exchange where each device sends and receives a data payload (originally inspired by Apple's tap to exchange contact info functionality).
 ## Showcase 
 
 [showcase.webm](https://github.com/user-attachments/assets/e1b75aec-c173-4913-a7bd-5c49d4e267a6)

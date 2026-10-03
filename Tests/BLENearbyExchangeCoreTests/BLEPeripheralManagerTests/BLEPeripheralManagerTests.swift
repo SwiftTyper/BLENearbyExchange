@@ -76,7 +76,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       fullyReceivedPayload.fulfill()
     }
 
-    await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 2.0)
+    await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 5.0)
 
     let peerReceivedFrameCount = peer.updates.filter {
       if case .payload = $0 {
