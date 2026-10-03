@@ -1,8 +1,8 @@
+import AVFoundation
 import BLENearbyExchangeCore
 import Foundation
 import Observation
 import SwiftUI
-import AVFoundation
 
 @MainActor
 @Observable
@@ -162,6 +162,6 @@ extension NearbyExchangePresenter {
   }
 }
 
-extension SystemSoundID {
-  fileprivate static let success: Self = 1027
+private extension SystemSoundID {
+  static let success: Self = 1027
 }
