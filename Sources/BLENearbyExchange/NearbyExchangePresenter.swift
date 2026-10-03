@@ -1,3 +1,4 @@
+import AVFoundation
 import BLENearbyExchangeCore
 import Foundation
 import Observation
@@ -79,6 +80,7 @@ final class NearbyExchangePresenter {
     switch event {
     case .connected:
       guard case .searching = phase else { return }
+      try? SystemSoundPlayer.play(.connected)
       phase = .approaching(distance: nil)
 
     case let .distance(distance):
@@ -97,11 +99,13 @@ final class NearbyExchangePresenter {
     case .completed:
       guard let received else { return }
       phase = .completed
+      try? SystemSoundPlayer.play(.success)
       try? await Task.sleep(for: .seconds(2))
       await finish(.success(received))
 
     case let .failed(error):
       phase = .failed(error)
+      try? SystemSoundPlayer.play(.fail)
       try? await Task.sleep(for: .seconds(2))
       await finish(.failure(error))
     }
@@ -156,4 +160,8 @@ extension NearbyExchangePresenter {
   private static func clamped(_ progress: Double) -> Double {
     min(1, max(0, progress))
   }
+}
+
+private extension SystemSoundID {
+  static let success: Self = 1027
 }
