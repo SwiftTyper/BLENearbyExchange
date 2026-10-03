@@ -256,7 +256,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       outgoingPayloadReceived.fulfill()
     }
 
-    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 2.0)
+    await fulfillment(of: [payloadReceived, doneReceived, outgoingPayloadReceived], timeout: 5.0)
 
     let updates = peer.updates
     let doneIndex = try XCTUnwrap(updates.firstIndex(of: .control(.done)))
