@@ -1,12 +1,11 @@
 {
-  "originHash" : "6ac12f6aef3e1b38d0bdf3917341ce775da3bc5321e76f3ac1af05da14f25170",
+  "originHash" : "fe9a18ca3f889bde70ea431266b3a536973a62b6fc28c81f4e3451330a25c3fc",
   "pins" : [
     {
       "identity" : "ios-corebluetooth-mock",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SwiftTyper/IOS-CoreBluetooth-Mock",
+      "location" : "https://github.com/nordicsemi/IOS-CoreBluetooth-Mock",
       "state" : {
-        "branch" : "feature/peripheral-manager-support",
         "revision" : "d126c3ee60153c6b5f4b73b74e225ee9b0421c9c"
       }
     },
