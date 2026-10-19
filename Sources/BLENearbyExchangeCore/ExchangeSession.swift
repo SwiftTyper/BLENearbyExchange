@@ -28,7 +28,7 @@ public final class ExchangeSession: TimeoutController {
   ) {
     let peripheral = BLEPeripheralManager(
       configuration: configuration,
-      ranger: ProximityRanger(),
+      makeRanger: ProximityRanger(),
       forceMock: false,
     )
 
@@ -215,6 +215,9 @@ public final class ExchangeSession: TimeoutController {
     central?.onDistance = { [weak self] distance, uuid in
       self?.onDistance(distance: distance, peerId: uuid)
     }
+    peripheral?.onDistance = { [weak self] distance, uuid in
+      self?.onDistance(distance: distance, peerId: uuid)
+    }
     central?.onPayloadReceived = { [weak self] data in
       self?.markReceived(data)
     }
@@ -273,7 +276,7 @@ public final class ExchangeSession: TimeoutController {
       central?.send(payload: self.payload, to: peerId)
       
     case .peripheral:
-      peripheral?.send(payload: self.payload)
+      peripheral?.send(payload: self.payload, to: peerId)
     }
     
     //invalidate every other session cause we found the one
