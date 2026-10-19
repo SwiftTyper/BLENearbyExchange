@@ -10,7 +10,6 @@ public final class ExchangeSession: TimeoutController {
 
   private let configuration: NearbyExchange.Configuration
   private let roleResolver: RoleResolver
-  private var ranger: ProximityRanger?
   private var peripheral: BLEPeripheralInterface?
   private var central: BLECentralInterface?
 
@@ -27,23 +26,20 @@ public final class ExchangeSession: TimeoutController {
   public convenience init(
     configuration: NearbyExchange.Configuration,
   ) {
-    let ranger = ProximityRanger()
-
     let peripheral = BLEPeripheralManager(
       configuration: configuration,
-      ranger: ranger,
+      ranger: ProximityRanger(),
       forceMock: false,
     )
 
     let central = BLECentralManager(
       configuration: configuration,
-      ranger: ranger,
+      makeRanger: ProximityRanger(),
       forceMock: false,
     )
 
     self.init(
       configuration: configuration,
-      ranger: ranger,
       roleResolver: RoleResolver(),
       central: central,
       peripheral: peripheral,
@@ -53,7 +49,6 @@ public final class ExchangeSession: TimeoutController {
 
   init(
     configuration: NearbyExchange.Configuration,
-    ranger: ProximityRanger,
     roleResolver: RoleResolver,
     central: any BLECentralInterface,
     peripheral: any BLEPeripheralInterface,
@@ -61,7 +56,6 @@ public final class ExchangeSession: TimeoutController {
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
-    self.ranger = ranger
     self.peripheral = peripheral
     self.central = central
 
@@ -77,7 +71,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func start(payload: Data) async throws {
-    guard ranger?.isSupported == true
+    guard ProximityRanger.isSupported
     else { throw ExchangeError.unsupported }
 
     try await waitForPoweredOn(peripheralState)
@@ -120,7 +114,8 @@ public final class ExchangeSession: TimeoutController {
     didComplete = true
 
     cancelTimer()
-    ranger?.stop()
+    // HANDLE
+//    ranger?.stop()
 
     switch error {
     case .cancelledByPeer, .failedOnPeer, .disconnected:
@@ -178,7 +173,6 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func stop() {
-    ranger?.stop()
     peripheral?.stop()
     central?.stop()
 
@@ -218,26 +212,8 @@ public final class ExchangeSession: TimeoutController {
       }
       self?.role = role
     }
-    ranger?.onDistance = { [weak self] distance in
-      guard let self else { return }
-
-      events.send(.distance(distance))
-
-      guard
-        let role,
-        distance <= configuration.distanceThreshold,
-        !distanceAquired
-      else { return }
-
-      distanceAquired = true
-
-      switch role {
-      case .central:
-        central?.send(payload: payload)
-
-      case .peripheral:
-        peripheral?.send(payload: payload)
-      }
+    central?.onDistance = { [weak self] distance, uuid in
+      self?.onDistance(distance: distance, peerId: uuid)
     }
     central?.onPayloadReceived = { [weak self] data in
       self?.markReceived(data)
@@ -256,9 +232,6 @@ public final class ExchangeSession: TimeoutController {
     }
     peripheral?.onError = { [weak self] error in
       self?.fail(error)
-    }
-    ranger?.onError = { [weak self] error in
-      self?.fail(.rangingFailed(error.localizedDescription))
     }
     central?.onConnected = { [weak self] in
       self?.markConnected()
@@ -282,6 +255,28 @@ public final class ExchangeSession: TimeoutController {
       self?.received = $0
       self?.emitProgress()
     }
+  }
+  
+  private func onDistance(distance: Float, peerId: UUID) {
+    events.send(.distance(distance))
+    
+    guard
+      let role,
+      distance <= configuration.distanceThreshold,
+      !distanceAquired
+        else { return }
+    
+    distanceAquired = true
+    
+    switch role {
+    case .central:
+      central?.send(payload: self.payload, to: peerId)
+      
+    case .peripheral:
+      peripheral?.send(payload: self.payload)
+    }
+    
+    //invalidate every other session cause we found the one
   }
 
   private func emitProgress() {

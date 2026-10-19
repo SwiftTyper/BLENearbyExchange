@@ -4,6 +4,8 @@ public enum GATT {
   static let handshake = UUID(uuidString: "B1E0E4CE-1234-4E45-8A52-4259455843B0")!
   static let payload = UUID(uuidString: "B1E0E4CE-1234-4E45-8A52-4259455843B1")!
   static let control = UUID(uuidString: "B1E0E4CE-1234-4E45-8A52-4259455843B2")!
+  
+  static let allCasesUUIDs: [UUID] = [GATT.handshake, GATT.payload, GATT.control]
 
   public enum Control: UInt8, Sendable {
     case done = 0x03

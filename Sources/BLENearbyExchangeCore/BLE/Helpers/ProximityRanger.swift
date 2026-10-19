@@ -9,7 +9,7 @@ public class ProximityRanger: NSObject {
   var onDistance: ((Float) -> Void)?
   var onError: ((Error) -> Void)?
 
-  var isSupported: Bool {
+  static var isSupported: Bool {
     #if !os(macOS)
       return NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
     #else

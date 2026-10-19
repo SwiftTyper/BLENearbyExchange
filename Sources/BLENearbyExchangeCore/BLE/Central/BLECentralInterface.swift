@@ -11,9 +11,10 @@ protocol BLECentralInterface {
   var onConnected: (() -> Void)? { get set }
   var onSendProgress: ((TransferProgress) -> Void)? { get set }
   var onReceiveProgress: ((TransferProgress) -> Void)? { get set }
+  var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)? { get set }
 
   func startScanning(nonce: UInt32)
-  func send(payload: Data)
+  func send(payload: Data, to peerId: UUID)
   func confirmSent()
   func sendTerminate(_ control: GATT.Control, completion: @escaping () -> Void)
   func stop()
