@@ -1,12 +1,13 @@
 {
-  "originHash" : "fe9a18ca3f889bde70ea431266b3a536973a62b6fc28c81f4e3451330a25c3fc",
+  "originHash" : "9ed886ca22326c9c51ce78d3bba20a18d8b7c2c5e59f55d43fc831b0d2c55366",
   "pins" : [
     {
       "identity" : "ios-corebluetooth-mock",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nordicsemi/IOS-CoreBluetooth-Mock",
       "state" : {
-        "revision" : "d126c3ee60153c6b5f4b73b74e225ee9b0421c9c"
+        "branch" : "main",
+        "revision" : "a6e5c994466c46f2c9e0d849797e4ca74b1e9665"
       }
     },
     {

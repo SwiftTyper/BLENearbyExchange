@@ -179,9 +179,8 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
         if result {
           sentBytes += chunk.count - Chunker.headerSize
+          onSendProgress?(sendProgress)
         }
-
-        onSendProgress?(sendProgress)
 
         return result
       }

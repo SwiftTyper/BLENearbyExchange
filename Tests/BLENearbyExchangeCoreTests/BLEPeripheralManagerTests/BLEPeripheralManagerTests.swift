@@ -59,23 +59,23 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     let payload = Data(repeating: 0x00, count: 4000)
     let frameCount = Chunker.chunk(payload, mtu: peer.spec.maximumUpdateValueLength).count
-
-    peripheral.send(payload: payload)
-
+    
     let fullyEnqueued = expectation(description: "the full payload was enqueued")
-
+    
     peripheral.onSendProgress = { progress in
       guard progress.bytes == payload.count else { return }
       fullyEnqueued.fulfill()
     }
-
+    
     let fullyReceivedPayload = expectation(description: "the full payload was received by the peer")
     fullyReceivedPayload.expectedFulfillmentCount = frameCount
-
+    
     peer.onPayload = { _ in
       fullyReceivedPayload.fulfill()
     }
 
+    peripheral.send(payload: payload)
+  
     await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 5.0)
 
     let peerReceivedFrameCount = peer.updates.filter {

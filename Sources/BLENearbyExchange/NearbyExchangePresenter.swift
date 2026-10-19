@@ -161,7 +161,3 @@ extension NearbyExchangePresenter {
     min(1, max(0, progress))
   }
 }
-
-private extension SystemSoundID {
-  static let success: Self = 1027
-}

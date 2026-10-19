@@ -15,7 +15,7 @@ final class MockCentralSpy {
   }
 
   init() {
-    spec = CBMCentralSpec(delegate: self)
+    spec = CBMCentralSpec(connectionInterval: 0.001, delegate: self)
   }
 
   var onControl: ((GATT.Control) -> Void)?
