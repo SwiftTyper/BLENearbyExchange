@@ -24,25 +24,11 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   
   @BLEActor
   struct PeerSession {
-    init(
-      peripheral: CBMPeripheral,
-      ranger: ProximityRanger,
-      reassembler: Reassembler,
-      communicationCipher: MessageCipherInterface,
-      characterisitcs: [CBMCharacteristic]? = nil,
-    ) {
-      self.peripheral = peripheral
-      self.ranger = ranger
-      self.reassembler = reassembler
-      self.characterisitcs = characterisitcs
-      self.communicationCipher = communicationCipher
-    }
-    
     let peripheral: CBMPeripheral
     let ranger: ProximityRanger
     var communicationCipher: any MessageCipherInterface
     var reassembler: Reassembler
-    var characterisitcs: [CBMCharacteristic]?
+    var characterisitcs: [CBMCharacteristic]? = nil
 
     func invalidate() {
       peripheral.delegate = nil
@@ -131,7 +117,6 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
     sentBytes = 0
     payloadBytes = 0
-//    reassembler = Reassembler()
 
     onPayloadReceived = nil
     onRoleReceived = nil
@@ -224,7 +209,24 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
     if role == .central {
       central.connect(peripheral)
       peripheral.delegate = self
-      // do i have to keep a reference to the peripheral at this stage?
+      
+      let ranger = makeRanger()
+      
+      ranger.onDistance = { distance in
+        self.onDistance?(distance, peripheral.identifier)
+      }
+      
+      ranger.onError = { error in
+        // TODO: think about what to do if one session fails to start
+        self.onError?(.rangingFailed(error.localizedDescription))
+      }
+      
+      self.peripherals[peripheral.identifier] = .init(
+        peripheral: peripheral,
+        ranger: ranger,
+        communicationCipher: makeCipher(),
+        reassembler: Reassembler()
+      )
     }
 
     onRoleReceived?(role)
@@ -311,24 +313,6 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     peripheral.discoverCharacteristics(
       [GATT.handshake.cbuuid, GATT.payload.cbuuid, GATT.control.cbuuid],
       for: service,
-    )
-    
-    let ranger = makeRanger()
-    
-    ranger.onDistance = { distance in
-      self.onDistance?(distance, peripheral.identifier)
-    }
-    
-    ranger.onError = { error in
-      // TODO: think about what to do if one session fails to start
-      self.onError?(.rangingFailed(error.localizedDescription))
-    }
-    
-    self.peripherals[peripheral.identifier] = .init(
-      peripheral: peripheral,
-      ranger: ranger,
-      reassembler: Reassembler(),
-      communicationCipher: makeCipher(),
     )
   }
 
