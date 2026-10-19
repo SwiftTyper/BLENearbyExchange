@@ -21,7 +21,6 @@ public final class ExchangeSession: TimeoutController {
   private var didPeerReceive = false
   private var didReceive = false
   private var didComplete = false
-  private var distanceAquired = false
 
   public convenience init(
     configuration: NearbyExchange.Configuration,
@@ -98,7 +97,6 @@ public final class ExchangeSession: TimeoutController {
     central?.stop()
 
     role = nil
-    distanceAquired = false
 
     try await beginHandshake()
   }
@@ -183,40 +181,25 @@ public final class ExchangeSession: TimeoutController {
     didPeerReceive = false
     didReceive = false
     didComplete = false
-    distanceAquired = false
     sent = TransferProgress()
     received = TransferProgress()
   }
 
   private func wireCallbacks() {
-    peripheral?.onRoleConfirmed = { [weak self] in
-      self?.central?.stop()
-      self?.role = .peripheral
-    }
-    central?.onRoleReceived = { [weak self] role in
-      switch role {
-      case .central:
-        self?.peripheral?.stop()
-
-      case .peripheral:
-        break
-
-      case nil:
-        Task {
-          do {
-            try await self?.restartHandshake()
-          } catch {
-            self?.fail(ExchangeError(error))
-          }
+    central?.onNonceConflict = { [weak self] in
+      Task {
+        do {
+          try await self?.restartHandshake()
+        } catch {
+          self?.fail(ExchangeError(error))
         }
       }
-      self?.role = role
     }
     central?.onDistance = { [weak self] distance, uuid in
-      self?.onDistance(distance: distance, peerId: uuid)
+      self?.onDistance(distance: distance, peerId: uuid, role: .central)
     }
     peripheral?.onDistance = { [weak self] distance, uuid in
-      self?.onDistance(distance: distance, peerId: uuid)
+      self?.onDistance(distance: distance, peerId: uuid, role: .peripheral)
     }
     central?.onPayloadReceived = { [weak self] data in
       self?.markReceived(data)
@@ -260,26 +243,25 @@ public final class ExchangeSession: TimeoutController {
     }
   }
   
-  private func onDistance(distance: Float, peerId: UUID) {
+  private func onDistance(distance: Float, peerId: UUID, role: ConnectionRole) {
     events.send(.distance(distance))
-    
+
     guard
-      let role,
-      distance <= configuration.distanceThreshold,
-      !distanceAquired
-        else { return }
-    
-    distanceAquired = true
-    
+      self.role == nil,
+      distance <= configuration.distanceThreshold
+    else { return }
+
+    self.role = role
+
     switch role {
     case .central:
+      peripheral?.stop()
       central?.send(payload: self.payload, to: peerId)
-      
+
     case .peripheral:
+      central?.stop()
       peripheral?.send(payload: self.payload, to: peerId)
     }
-    
-    //invalidate every other session cause we found the one
   }
 
   private func emitProgress() {

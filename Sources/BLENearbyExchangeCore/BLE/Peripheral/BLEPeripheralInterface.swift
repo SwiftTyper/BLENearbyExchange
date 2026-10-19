@@ -5,7 +5,6 @@ import Foundation
 protocol BLEPeripheralInterface {
   var onStateChange: ((CBMManagerState) -> Void)? { get set }
   var onPayloadReceived: ((Data) -> Void)? { get set }
-  var onRoleConfirmed: (() -> Void)? { get set }
   var onPeerReceivedDataConfirmation: (() -> Void)? { get set }
   var onError: ((ExchangeError) -> Void)? { get set }
   var onConnected: (() -> Void)? { get set }

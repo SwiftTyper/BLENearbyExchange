@@ -41,13 +41,13 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
-  var onRoleReceived: ((_ role: ConnectionRole?) -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
   var onError: ((ExchangeError) -> Void)?
   var onConnected: (() -> Void)?
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
   var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)?
+  var onNonceConflict: (() -> Void)?
 
   private var terminationCompletion: (() -> Void)?
   private var sentBytes = 0
@@ -119,12 +119,12 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     payloadBytes = 0
 
     onPayloadReceived = nil
-    onRoleReceived = nil
     onPeerReceivedDataConfirmation = nil
     onError = nil
     onConnected = nil
     onSendProgress = nil
     onReceiveProgress = nil
+    onNonceConflict = nil
   }
 
   func send(payload: Data, to peerId: UUID) {
@@ -206,6 +206,11 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
       peerNonce: peerNonce,
     )
 
+    if role == nil {
+      onNonceConflict?()
+      return
+    }
+
     if role == .central {
       central.connect(peripheral)
       peripheral.delegate = self
@@ -228,8 +233,6 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
         reassembler: Reassembler()
       )
     }
-
-    onRoleReceived?(role)
   }
 
   func centralManager(

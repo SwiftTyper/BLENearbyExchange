@@ -32,7 +32,6 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
-  var onRoleConfirmed: (() -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
   var onError: ((ExchangeError) -> Void)?
   var onConnected: (() -> Void)?
@@ -160,7 +159,6 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     payloadBytes = 0
 
     onPayloadReceived = nil
-    onRoleConfirmed = nil
     onPeerReceivedDataConfirmation = nil
     onError = nil
     onConnected = nil
@@ -297,7 +295,6 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
       centrals[central.identifier]?.subscribedCharacteristics.isSuperset(of: requiredGATTIds) == true
     else { return }
 
-    onRoleConfirmed?()
     onConnected?()
   }
 
