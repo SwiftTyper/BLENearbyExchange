@@ -9,11 +9,6 @@ extension BLECentralManager {
     return peripherals[activeSessionId]?.peripheral
   }
   
-  var activePayloadChar: CBMCharacteristic? {
-    guard let activeSessionId else { return nil }
-    return peripherals[activeSessionId]?.characterisitcs.first(where: { $0.uuid == GATT.payload.cbuuid })
-  }
-  
   var activeControlChar: CBMCharacteristic? {
     guard let activeSessionId else { return nil }
     return peripherals[activeSessionId]?.characterisitcs.first(where: { $0.uuid == GATT.control.cbuuid })
@@ -30,10 +25,12 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   @BLEActor
   struct PeerSession {
     let peripheral: CBMPeripheral
-    var characterisitcs: [CBMCharacteristic]
+    let characterisitcs: [CBMCharacteristic]
     let ranger: ProximityRanger
+    var communicationCipher: any MessageCipherInterface
     
     func invalidate() {
+      peripheral.delegate = nil
       ranger.stop()
     }
   }
@@ -56,7 +53,6 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   private var payloadBytes = 0
   private var reassembler = Reassembler()
   private let transferQueue: UnlimitedTransferQueue = .init()
-  private var communicationCipher: MessageCipherInterface?
   private var makeCipher: () -> any MessageCipherInterface
   private let makeRanger: () -> ProximityRanger
 
@@ -69,8 +65,6 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     self.configuration = configuration
     self.makeCipher = makeCipher
     self.makeRanger = makeRanger
-    
-    self.communicationCipher = makeCipher()
 
     super.init()
 
@@ -109,8 +103,6 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   }
 
   func stop() {
-//    peripheral?.delegate = nil
-
     if manager.state == .poweredOn {
       manager.stopScan()
 
@@ -119,10 +111,9 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 //      }
     }
 
-//    peripheral = nil
-//    handshakeChar = nil
-//    payloadChar = nil
-//    controlChar = nil
+    peripherals.forEach { $0.value.invalidate() }
+    peripherals = [:]
+    activeSessionId = nil
     nonce = nil
 
     transferQueue.clear()
@@ -131,7 +122,6 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     sentBytes = 0
     payloadBytes = 0
     reassembler = Reassembler()
-    communicationCipher = makeCipher()
 
     onPayloadReceived = nil
     onRoleReceived = nil
@@ -143,6 +133,8 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   }
 
   func send(payload: Data, to peerId: UUID) {
+    activeSessionId = peerId
+
     let ids = self.peripherals.map(\.key)
     
     for id in ids where id != peerId {
@@ -152,10 +144,8 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     
     guard
       let peripheral = self.peripherals[peerId]?.peripheral,
-      let payloadChar = self.activePayloadChar
-    else { return }
-
-    guard let encryptedPayload = try? communicationCipher?.encrypt(data: payload)
+      let payloadChar = self.peripherals[peerId]?.characterisitcs.first(where: { $0.uuid == GATT.payload.cbuuid }),
+      let encryptedPayload = try? self.peripherals[peerId]?.communicationCipher.encrypt(data: payload)
     else {
       onError?(.transferFailed("Couldn't encrypt the payload."))
       return
@@ -347,7 +337,8 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     self.peripherals[peripheral.identifier] = .init(
       peripheral: peripheral,
       characterisitcs: characteristics,
-      ranger: ranger
+      ranger: ranger,
+      communicationCipher: makeCipher()
     )
     
     // maybe i won't have to subscribe to every characterstic just the handshake at this point
@@ -386,15 +377,14 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
     else { return }
 
     guard
-      let token = peerSession.ranger.localDiscoveryToken(),
-      let communicationCipher
+      let token = peerSession.ranger.localDiscoveryToken()
     else {
       onError?(.rangingFailed("No local discovery token."))
       return
     }
 
     let handshakePayload = HandshakePayload(
-      publicKey: communicationCipher.localPublicKey.rawRepresentation,
+      publicKey: peerSession.communicationCipher.localPublicKey.rawRepresentation,
       token: token,
     )
 
@@ -447,35 +437,40 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       reassembler.reset()
 
       guard
-        let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full),
-        let peerSession = peripherals[peripheral.identifier]
+        let peerHandshakePayload = try? JSONDecoder().decode(HandshakePayload.self, from: full)
       else {
         onError?(.handshakeFailed("couldn't decode handshake payload"))
         return
       }
 
       do {
-        try communicationCipher?.establish(with: peerHandshakePayload.publicKey)
+        try self.peripherals[peripheral.identifier]?.communicationCipher.establish(with: peerHandshakePayload.publicKey)
       } catch {
         onError?(.handshakeFailed("Couldn't establish the shared key."))
         return
       }
 
       do {
-        try peerSession.ranger.startRanging(peerToken: peerHandshakePayload.token)
+        try self.peripherals[peripheral.identifier]?.ranger.startRanging(peerToken: peerHandshakePayload.token)
       } catch {
         onError?(.rangingFailed(error.localizedDescription))
       }
 
     case GATT.payload.cbuuid:
+      // TODO: the peer may hit the distance threshold before we do, its payload is dropped here
+      guard activeSessionId == peripheral.identifier
+      else { return }
+
       let full = try? reassembler.add(frame: value)
 
       onReceiveProgress?(reassembler.progress)
 
-      guard let full, let controlChar = self.activeControlChar
+      guard
+        let full,
+        let controlChar = self.peripherals[peripheral.identifier]?.characterisitcs.first(where: { $0.uuid == GATT.control.cbuuid })
       else { return }
 
-      guard let decryptedPayload = try? communicationCipher?.decrypt(data: full)
+      guard let decryptedPayload = try? self.peripherals[peripheral.identifier]?.communicationCipher.decrypt(data: full)
       else {
         onError?(.transferFailed("Couldn't decrypt the payload."))
         return
@@ -493,6 +488,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     case GATT.control.cbuuid:
       guard
+        activeSessionId == peripheral.identifier,
         let raw = value.first,
         let control = GATT.Control(rawValue: raw)
       else { return }
