@@ -101,6 +101,16 @@ public final class ExchangeSession: TimeoutController {
     try await beginHandshake()
   }
 
+  private func restart() {
+    Task { [weak self] in
+      do {
+        try await self?.restartHandshake()
+      } catch {
+        self?.fail(ExchangeError(error))
+      }
+    }
+  }
+
   override public func timeoutDidFire() {
     fail(.timedOut)
   }
@@ -187,13 +197,13 @@ public final class ExchangeSession: TimeoutController {
 
   private func wireCallbacks() {
     central?.onNonceConflict = { [weak self] in
-      Task {
-        do {
-          try await self?.restartHandshake()
-        } catch {
-          self?.fail(ExchangeError(error))
-        }
-      }
+      self?.restart()
+    }
+    central?.onDeclined = { [weak self] in
+      self?.restart()
+    }
+    peripheral?.onDeclined = { [weak self] in
+      self?.restart()
     }
     central?.onDistance = { [weak self] distance, uuid in
       self?.onDistance(distance: distance, peerId: uuid, role: .central)
@@ -255,11 +265,11 @@ public final class ExchangeSession: TimeoutController {
 
     switch role {
     case .central:
-      peripheral?.stop()
+      peripheral?.declineAll()
       central?.send(payload: self.payload, to: peerId)
 
     case .peripheral:
-      central?.stop()
+      central?.declineAll()
       peripheral?.send(payload: self.payload, to: peerId)
     }
   }

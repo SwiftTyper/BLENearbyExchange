@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant A as A (central manager)
+    participant B as B (peripheral manager)
+    participant C as C (peripheral manager)
+
+    Note over A,C: A is ranging B and C
+    A->>A: distance(B) within threshold, role central
+    A->>A: send(to B), activeSessionId = B, stopScan
+    A->>C: write declined (control, withResponse)
+    A->>A: dropPeer(C)
+    A->>B: encrypted payload
+    C->>C: handleDecline(A), A not selected, dropPeer(A)
+    Note over C: C keeps ranging B

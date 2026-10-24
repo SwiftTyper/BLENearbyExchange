@@ -1,0 +1,6 @@
+flowchart TD
+    R["declined received from peer P"] --> D["dropPeer(P): stop ranger, remove session"]
+    D --> Q{"P == activeSessionId?"}
+    Q -- "No: nothing selected or another peer selected" --> K["Keep ranging remaining candidates"]
+    Q -- "Yes: crossed selection" --> X["activeSessionId = nil, transferQueue.clear()"]
+    X --> S["onDeclined, ExchangeSession.restart(), restartHandshake()"]

@@ -29,6 +29,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
   private var centrals: [UUID: PeerSession] = [:]
   private var activeSessionId: UUID? = nil
+  private var acceptsPeers = true
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
@@ -38,6 +39,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
   var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)?
+  var onDeclined: (() -> Void)?
 
   private var sentBytes = 0
   private var payloadBytes = 0
@@ -151,6 +153,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     centrals.forEach { $0.value.invalidate() }
     centrals = [:]
     activeSessionId = nil
+    acceptsPeers = true
 
     transferQueue.clear()
     terminationCompletion = nil
@@ -164,18 +167,61 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     onConnected = nil
     onSendProgress = nil
     onReceiveProgress = nil
+    onDeclined = nil
+  }
+
+  func declineAll() {
+    acceptsPeers = false
+    manager.stopAdvertising()
+    decline(except: nil)
+  }
+
+  private func decline(except peerId: UUID?) {
+    let ids = centrals.map(\.key)
+
+    for id in ids where id != peerId {
+      if let central = centrals[id]?.central {
+        sendDecline(to: central)
+      }
+
+      dropPeer(id)
+    }
+  }
+
+  private func sendDecline(to central: CBMCentral) {
+    transferQueue.add(priority: .high) { [weak self] in
+      guard let self else { return false }
+
+      return manager.updateValue(
+        Data([GATT.Control.declined.rawValue]),
+        for: controlChar,
+        onSubscribedCentrals: [central],
+      )
+    }
+  }
+
+  private func handleDecline(from peerId: UUID) {
+    dropPeer(peerId)
+
+    guard activeSessionId == peerId
+    else { return }
+
+    activeSessionId = nil
+    transferQueue.clear()
+    onDeclined?()
+  }
+
+  private func dropPeer(_ peerId: UUID) {
+    centrals[peerId]?.invalidate()
+    centrals[peerId] = nil
   }
 
   func send(payload: Data, to peerId: UUID) {
     activeSessionId = peerId
+    acceptsPeers = false
     manager.stopAdvertising()
 
-    let ids = centrals.map(\.key)
-
-    for id in ids where id != peerId {
-      centrals[id]?.invalidate()
-      centrals[id] = nil
-    }
+    decline(except: peerId)
 
     guard
       let central = centrals[peerId]?.central,
@@ -283,8 +329,13 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
     let requiredGATTIds = GATT.allCasesUUIDs.map(\.cbuuid.uuidString)
 
     if centrals[central.identifier] == nil {
-      guard activeSessionId == nil
-      else { return }
+      guard acceptsPeers
+      else {
+        if characteristic.uuid == GATT.control.cbuuid {
+          sendDecline(to: central)
+        }
+        return
+      }
 
       centrals[central.identifier] = makePeerSession(for: central)
     }
@@ -309,8 +360,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
       centrals[central.identifier]?.subscribedCharacteristics.isEmpty == true
     else { return }
 
-    centrals[central.identifier]?.invalidate()
-    centrals[central.identifier] = nil
+    dropPeer(central.identifier)
 
     guard activeSessionId == central.identifier
     else { return }
@@ -439,12 +489,15 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
 
         peripheral.respond(to: request, withResult: .success)
 
-        guard activeSessionId == peerId
+        guard control == .declined || activeSessionId == peerId
         else { return }
 
         switch control {
         case .done:
           onPeerReceivedDataConfirmation?()
+
+        case .declined:
+          handleDecline(from: peerId)
 
         case .cancelled:
           onError?(.cancelledByPeer)

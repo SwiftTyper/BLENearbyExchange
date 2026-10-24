@@ -9,6 +9,7 @@ public enum GATT {
 
   public enum Control: UInt8, Sendable {
     case done = 0x03
+    case declined = 0x04
     case cancelled = 0xFE
     case failed = 0xFF
   }

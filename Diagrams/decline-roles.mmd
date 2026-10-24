@@ -1,0 +1,5 @@
+flowchart LR
+    A["Device A"] -- "A central, B peripheral" --> B["Device B"]
+    A -- "A central, C peripheral" --> C["Device C"]
+    B -- "B central, C peripheral" --> C
+    N["Nonces: A > B > C. Higher nonce is central"]

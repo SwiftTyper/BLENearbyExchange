@@ -34,6 +34,7 @@ WindowGroup {
 - [ ] Play around with Bluetooth Channel Sounding
 - [x] Encrypt Traffic
 - [x] Mock BLE for units
-- [ ] Handle 3+ potential devices in proximity
+- [x] Handle 3+ potential devices in proximity
+- [ ] Prove that we are actually communciating with the closest device
 - [ ] Add L2CAP support
 - [ ] Improve the UX/UI

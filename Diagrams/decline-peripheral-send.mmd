@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant A as A (central manager)
+    participant B as B (central manager)
+    participant C as C (peripheral manager)
+
+    Note over C: A and B are both subscribed to C
+    C->>C: distance(B) within threshold, role peripheral
+    C->>C: send(to B), activeSessionId = B, stopAdvertising, acceptsPeers = false
+    C-->>A: notify declined (high priority, onSubscribedCentrals [A])
+    C->>C: dropPeer(A)
+    C-->>B: encrypted payload (onSubscribedCentrals [B])
+    A->>A: handleDecline(C), C not selected, dropPeer(C)
+    Note over A: A keeps ranging B

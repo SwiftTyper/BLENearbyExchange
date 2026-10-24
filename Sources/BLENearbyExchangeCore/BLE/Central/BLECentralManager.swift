@@ -48,6 +48,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   var onReceiveProgress: ((TransferProgress) -> Void)?
   var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)?
   var onNonceConflict: (() -> Void)?
+  var onDeclined: (() -> Void)?
 
   private var terminationCompletion: (() -> Void)?
   private var sentBytes = 0
@@ -101,14 +102,13 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   func stop() {
     if manager.state == .poweredOn {
       manager.stopScan()
-
-//      if let peripheral {
-//        manager.cancelPeripheralConnection(peripheral)
-//      }
+      
+      peripherals.forEach { manager.cancelPeripheralConnection($0.value.peripheral) }
     }
-
+    
     peripherals.forEach { $0.value.invalidate() }
     peripherals = [:]
+
     activeSessionId = nil
     nonce = nil
 
@@ -125,19 +125,60 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     onSendProgress = nil
     onReceiveProgress = nil
     onNonceConflict = nil
+    onDeclined = nil
+  }
+
+  func declineAll() {
+    manager.stopScan()
+    decline(except: nil)
+  }
+
+  private func decline(except peerId: UUID?) {
+    let ids = peripherals.map(\.key)
+
+    for id in ids where id != peerId {
+      guard let peerSession = peripherals[id]
+      else { continue }
+
+      if let controlChar = peerSession.characterisitcs?.first(where: { $0.uuid == GATT.control.cbuuid }) {
+        peerSession.peripheral.writeValue(
+          Data([GATT.Control.declined.rawValue]),
+          for: controlChar,
+          type: .withResponse,
+        )
+      } else {
+        manager.cancelPeripheralConnection(peerSession.peripheral)
+      }
+    }
+  }
+
+  private func handleDecline(from peerId: UUID) {
+    guard let peripheral = self.peripherals[peerId]?.peripheral
+    else { return }
+    
+    self.manager.cancelPeripheralConnection(peripheral)
+    
+    cleanupPeerState(peerId)
+    
+    guard activeSessionId == peerId
+    else { return }
+
+    activeSessionId = nil
+    transferQueue.clear()
+    onDeclined?()
+  }
+
+  private func cleanupPeerState(_ peerId: UUID) {
+    peripherals[peerId]?.invalidate()
+    peripherals[peerId] = nil
   }
 
   func send(payload: Data, to peerId: UUID) {
     activeSessionId = peerId
     manager.stopScan()
 
-    let ids = self.peripherals.map(\.key)
-    
-    for id in ids where id != peerId {
-      self.peripherals[id]?.invalidate()
-      self.peripherals[id] = nil
-    }
-    
+    decline(except: peerId)
+
     guard
       let peripheral = self.peripherals[peerId]?.peripheral,
       let payloadChar = self.peripherals[peerId]?.characterisitcs?.first(where: { $0.uuid == GATT.payload.cbuuid }),
@@ -252,9 +293,12 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 
   func centralManager(
     _: CBMCentralManager,
-    didDisconnectPeripheral _: CBMPeripheral,
+    didDisconnectPeripheral peripheral: CBMPeripheral,
     error _: Error?,
   ) {
+    guard activeSessionId == peripheral.identifier
+    else { return cleanupPeerState(peripheral.identifier) }
+
     if let terminationCompletion {
       terminationCompletion()
       self.terminationCompletion = nil
@@ -265,12 +309,15 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 
   func centralManager(
     _: CBMCentralManager,
-    didDisconnectPeripheral _: CBMPeripheral,
+    didDisconnectPeripheral peripheral: CBMPeripheral,
     timestamp _: CFAbsoluteTime,
     isReconnecting: Bool,
     error _: Error?,
   ) {
     guard !isReconnecting else { return }
+
+    guard activeSessionId == peripheral.identifier
+    else { return cleanupPeerState(peripheral.identifier) }
 
     if let terminationCompletion {
       terminationCompletion()
@@ -283,13 +330,16 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
 
 extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   func peripheral(
-    _: any CBMPeripheral,
+    _ peripheral: any CBMPeripheral,
     didWriteValueFor characteristic: CBMCharacteristic,
     error _: (any Error)?,
   ) {
     guard
       characteristic.uuid == GATT.control.cbuuid
     else { return }
+
+    guard activeSessionId == peripheral.identifier
+    else { return manager.cancelPeripheralConnection(peripheral) }
 
     if let terminationCompletion {
       terminationCompletion()
@@ -348,11 +398,14 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
   }
 
   func peripheral(
-    _: CBMPeripheral,
+    _ peripheral: CBMPeripheral,
     didModifyServices invalidatedServices: [CBMService],
   ) {
     guard
       invalidatedServices.contains(where: { $0.uuid == configuration.serviceUUID.cbuuid })
+    else { return }
+
+    guard activeSessionId == peripheral.identifier
     else { return }
 
     onError?(.disconnected)
@@ -489,14 +542,17 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
 
     case GATT.control.cbuuid:
       guard
-        activeSessionId == peripheral.identifier,
         let raw = value.first,
-        let control = GATT.Control(rawValue: raw)
+        let control = GATT.Control(rawValue: raw),
+        control == .declined || activeSessionId == peripheral.identifier
       else { return }
 
       switch control {
       case .done:
         onPeerReceivedDataConfirmation?()
+
+      case .declined:
+        handleDecline(from: peripheral.identifier)
 
       case .cancelled:
         onError?(.cancelledByPeer)

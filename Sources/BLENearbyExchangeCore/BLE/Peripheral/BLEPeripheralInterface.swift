@@ -11,9 +11,11 @@ protocol BLEPeripheralInterface {
   var onSendProgress: ((TransferProgress) -> Void)? { get set }
   var onReceiveProgress: ((TransferProgress) -> Void)? { get set }
   var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)? { get set }
+  var onDeclined: (() -> Void)? { get set }
 
   func startAdvertising(nonce: UInt32) async throws
   func send(payload: Data, to peerId: UUID)
+  func declineAll()
   func confirmSent()
   func sendTerminate(_ control: GATT.Control, completion: @escaping () -> Void)
   func stop()

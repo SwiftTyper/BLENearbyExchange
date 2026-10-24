@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant A as A (central manager)
+    participant Bp as B (peripheral manager)
+    participant Bc as B (central manager)
+    participant C as C (peripheral manager)
+
+    Note over Bp,Bc: B is peripheral to A and central to C
+    Bc->>Bc: distance(C) within threshold, role central
+    Bc->>Bc: send(to C)
+    Bc->>C: encrypted payload
+    Note over Bp: ExchangeSession calls peripheral.declineAll()
+    Bp->>Bp: acceptsPeers = false, stopAdvertising
+    Bp-->>A: notify declined
+    Bp->>Bp: dropPeer(A)
+    A->>A: handleDecline(B), B not selected, dropPeer(B)
+    Note over A: A keeps ranging C
