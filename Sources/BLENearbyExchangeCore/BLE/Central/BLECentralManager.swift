@@ -4,14 +4,18 @@ import CryptoKit
 import Foundation
 
 extension BLECentralManager {
-  private var activePeripheral: CBMPeripheral? {
-    guard let activeSessionId else { return nil }
-    return peripherals[activeSessionId]?.peripheral
-  }
-  
-  var activeControlChar: CBMCharacteristic? {
-    guard let activeSessionId else { return nil }
-    return peripherals[activeSessionId]?.characterisitcs?.first(where: { $0.uuid == GATT.control.cbuuid })
+  @BLEActor
+  private struct PeerSession {
+    let peripheral: CBMPeripheral
+    let ranger: ProximityRanger
+    var communicationCipher: any MessageCipherInterface
+    var reassembler: Reassembler
+    var characterisitcs: [CBMCharacteristic]? = nil
+    
+    func invalidate() {
+      peripheral.delegate = nil
+      ranger.stop()
+    }
   }
 }
 
@@ -21,20 +25,6 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
   private var nonce: UInt32?
   private var manager: CBMCentralManager!
-  
-  @BLEActor
-  struct PeerSession {
-    let peripheral: CBMPeripheral
-    let ranger: ProximityRanger
-    var communicationCipher: any MessageCipherInterface
-    var reassembler: Reassembler
-    var characterisitcs: [CBMCharacteristic]? = nil
-
-    func invalidate() {
-      peripheral.delegate = nil
-      ranger.stop()
-    }
-  }
 
   private var peripherals: [UUID : PeerSession] = [:]
   private var activeSessionId: UUID? = nil
@@ -43,7 +33,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   var onPayloadReceived: ((Data) -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
   var onError: ((ExchangeError) -> Void)?
-  var onConnected: (() -> Void)?
+  var onConnected: ((_ peer: UUID) -> Void)?
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
   var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)?
@@ -84,7 +74,10 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     _ control: GATT.Control,
     completion: @escaping () -> Void,
   ) {
-    guard let peripheral = activePeripheral, let controlChar = activeControlChar
+    guard
+      let activeSessionId,
+      let peripheral = peripherals[activeSessionId]?.peripheral,
+      let controlChar = peripherals[activeSessionId]?.characterisitcs?.first(where: { $0.uuid == GATT.control.cbuuid })
     else { return completion() }
 
     terminationCompletion = completion
@@ -101,10 +94,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   func stop() {
     if manager.state == .poweredOn {
       manager.stopScan()
-
-//      if let peripheral {
-//        manager.cancelPeripheralConnection(peripheral)
-//      }
+      peripherals.forEach { manager.cancelPeripheralConnection($0.value.peripheral) }
     }
 
     peripherals.forEach { $0.value.invalidate() }
@@ -130,6 +120,8 @@ final class BLECentralManager: NSObject, BLECentralInterface {
   func send(payload: Data, to peerId: UUID) {
     activeSessionId = peerId
     manager.stopScan()
+    
+    self.peripherals[peerId]?.ranger.stop()
 
     let ids = self.peripherals.map(\.key)
     
@@ -412,7 +404,7 @@ extension BLECentralManager: @BLEActor CBMPeripheralDelegate {
       }
     }
 
-    onConnected?()
+    onConnected?(peripheral.identifier)
   }
 
   func peripheral(

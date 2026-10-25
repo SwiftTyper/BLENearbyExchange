@@ -2,6 +2,21 @@ import CoreBluetoothMock
 import CryptoKit
 import Foundation
 
+extension BLEPeripheralManager {
+  @BLEActor
+  private struct PeerSession {
+    let central: CBMCentral
+    let ranger: ProximityRanger
+    var communicationCipher: any MessageCipherInterface
+    var reassembler: Reassembler
+    var subscribedCharacteristics: Set<String> = []
+    
+    func invalidate() {
+      ranger.stop()
+    }
+  }
+}
+
 @BLEActor
 final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private let configuration: NearbyExchange.Configuration
@@ -10,23 +25,9 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private var handshakeChar: CBMMutableCharacteristic!
   private var payloadChar: CBMMutableCharacteristic!
   private var controlChar: CBMMutableCharacteristic!
-
   private var advertisingContinuation: CheckedContinuation<Void, Error>?
   private var serviceContinuation: CheckedContinuation<Void, Error>?
-
-  @BLEActor
-  struct PeerSession {
-    let central: CBMCentral
-    let ranger: ProximityRanger
-    var communicationCipher: any MessageCipherInterface
-    var reassembler: Reassembler
-    var subscribedCharacteristics: Set<String> = []
-
-    func invalidate() {
-      ranger.stop()
-    }
-  }
-
+  
   private var centrals: [UUID: PeerSession] = [:]
   private var activeSessionId: UUID? = nil
 
@@ -34,7 +35,7 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   var onPayloadReceived: ((Data) -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
   var onError: ((ExchangeError) -> Void)?
-  var onConnected: (() -> Void)?
+  var onConnected: ((_ peerId: UUID) -> Void)?
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
   var onDistance: ((_ distance: Float, _ peer: UUID) -> Void)?
@@ -169,6 +170,8 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   func send(payload: Data, to peerId: UUID) {
     activeSessionId = peerId
     manager.stopAdvertising()
+    
+    centrals[peerId]?.ranger.stop()
 
     let ids = centrals.map(\.key)
 
@@ -295,7 +298,7 @@ extension BLEPeripheralManager: @BLEActor CBMPeripheralManagerDelegate {
       centrals[central.identifier]?.subscribedCharacteristics.isSuperset(of: requiredGATTIds) == true
     else { return }
 
-    onConnected?()
+    onConnected?(central.identifier)
   }
 
   func peripheralManager(

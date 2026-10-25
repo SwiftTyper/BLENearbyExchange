@@ -219,11 +219,11 @@ public final class ExchangeSession: TimeoutController {
     peripheral?.onError = { [weak self] error in
       self?.fail(error)
     }
-    central?.onConnected = { [weak self] in
-      self?.markConnected()
+    central?.onConnected = { [weak self] peerId in
+      self?.markConnected(peerId: peerId)
     }
-    peripheral?.onConnected = { [weak self] in
-      self?.markConnected()
+    peripheral?.onConnected = { [weak self] peerId in
+      self?.markConnected(peerId: peerId)
     }
     central?.onSendProgress = { [weak self] in
       self?.sent = $0
@@ -244,7 +244,7 @@ public final class ExchangeSession: TimeoutController {
   }
   
   private func onDistance(distance: Float, peerId: UUID, role: ConnectionRole) {
-    events.send(.distance(distance))
+    events.send(.distance(peerId, distance))
 
     guard
       self.role == nil,
@@ -252,6 +252,8 @@ public final class ExchangeSession: TimeoutController {
     else { return }
 
     self.role = role
+    
+    events.send(.choosen(peerId))
 
     switch role {
     case .central:
@@ -274,9 +276,9 @@ public final class ExchangeSession: TimeoutController {
     events.send(.progress(progress))
   }
 
-  private func markConnected() {
+  private func markConnected(peerId: UUID) {
     cancelTimer()
-    events.send(.connected)
+    events.send(.connected(peerId))
   }
 
   private func markPeerReceived() {

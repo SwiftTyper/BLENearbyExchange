@@ -13,4 +13,4 @@ $(DIAGRAM_DIR)/%.png: $(DIAGRAM_DIR)/%.mmd
 
 .PHONY: clean-diagrams
 clean-diagrams:
-	rm -f $(IMAGES)
+	rm -f $(DIAGRAM_DIR)/*.png
