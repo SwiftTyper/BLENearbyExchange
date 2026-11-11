@@ -166,19 +166,23 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     onSendProgress = nil
     onReceiveProgress = nil
   }
-
-  func send(payload: Data, to peerId: UUID) {
+  
+  func selectPeer(_ peerId: UUID) {
     activeSessionId = peerId
     manager.stopAdvertising()
     
     centrals[peerId]?.ranger.stop()
-
+    
     let ids = centrals.map(\.key)
-
+    
     for id in ids where id != peerId {
       centrals[id]?.invalidate()
       centrals[id] = nil
     }
+  }
+
+  func send(payload: Data, to peerId: UUID) {
+    selectPeer(peerId)
 
     guard
       let central = centrals[peerId]?.central,
