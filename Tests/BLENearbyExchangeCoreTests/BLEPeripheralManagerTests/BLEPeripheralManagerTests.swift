@@ -29,7 +29,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     let terminateSent = expectation(description: "the terminate control was sent")
 
-    peripheral.send(payload: payload)
+    peripheral.send(payload: payload, to: peer.spec.identifier)
 
     peripheral.sendTerminate(.cancelled) {
       terminateSent.fulfill()
@@ -74,7 +74,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       fullyReceivedPayload.fulfill()
     }
 
-    peripheral.send(payload: payload)
+    peripheral.send(payload: payload, to: peer.spec.identifier)
 
     await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 5.0)
 
@@ -96,6 +96,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
+
+    peripheral.selectPeer(peer.spec.identifier)
+
     let payloadChar = try characterisitcs.find(by: GATT.payload.cbuuid)
 
     let payload = Data(repeating: 0x00, count: 4000)
@@ -120,6 +123,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
+
+    peripheral.selectPeer(peer.spec.identifier)
+
     let controlChar = try characterisitcs.find(by: GATT.control.cbuuid)
 
     let doneCommendSent = expectation(description: "done command sent")
@@ -166,7 +172,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       transferStarted.fulfill()
     }
 
-    peripheral.send(payload: outgoingPayload)
+    peripheral.send(payload: outgoingPayload, to: peer.spec.identifier)
 
     await fulfillment(of: [transferStarted], timeout: 2.0)
 
@@ -225,7 +231,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       transferStarted.fulfill()
     }
 
-    peripheral.send(payload: outgoingPayload)
+    peripheral.send(payload: outgoingPayload, to: peer.spec.identifier)
 
     await fulfillment(of: [transferStarted], timeout: 2.0)
 
@@ -277,6 +283,8 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     try await connect(peer, to: peripheral)
 
+    peripheral.selectPeer(peer.spec.identifier)
+
     let errorExpectation = expectation(description: "error")
 
     peripheral.onError = { error in
@@ -294,6 +302,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
+
+    peripheral.selectPeer(peer.spec.identifier)
+
     let controlCharacteristic = try characterisitcs.find(by: GATT.control.cbuuid)
 
     let errorExpectation = expectation(description: "error")
@@ -365,7 +376,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
 extension BLEPeripheralManagerTests {
   private func makeSUT(
-    ranger: ProximityRanger = MockRanger(),
+    ranger: @autoclosure @escaping () -> ProximityRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
   ) async -> BLEPeripheralManager {
@@ -374,7 +385,7 @@ extension BLEPeripheralManagerTests {
 
     let peripheral = BLEPeripheralManager(
       configuration: .init(),
-      ranger: ranger,
+      makeRanger: ranger,
       makeCipher: { PlainTextCipher() },
       forceMock: true,
     )
@@ -402,10 +413,8 @@ extension BLEPeripheralManagerTests {
     try await peripheral.startAdvertising(nonce: 1)
 
     let subscribed = expectation(description: "the peer subscribed")
-    let roleConfirmed = expectation(description: "role confirmed")
 
-    peripheral.onConnected = { subscribed.fulfill() }
-    peripheral.onRoleConfirmed = { roleConfirmed.fulfill() }
+    peripheral.onConnected = { _ in subscribed.fulfill() }
 
     peer.spec.simulateConnection()
 
@@ -416,7 +425,7 @@ extension BLEPeripheralManagerTests {
 
     peer.subscribe(to: characteristics)
 
-    await fulfillment(of: [subscribed, roleConfirmed], timeout: 2.0)
+    await fulfillment(of: [subscribed], timeout: 2.0)
 
     return characteristics
   }

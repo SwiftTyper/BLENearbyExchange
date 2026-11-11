@@ -12,6 +12,7 @@ final class ExchangeSessionTests: XCTestCase {
     let peerNonce: UInt32 = 1
     let collidingLocalNonce: UInt32 = 1
     let freshLocalNonce: UInt32 = 2
+    let peerId = UUID()
 
     let (session, central, peripheral) = makeSUT(
       localNonces: [collidingLocalNonce, freshLocalNonce],
@@ -41,7 +42,7 @@ final class ExchangeSessionTests: XCTestCase {
     await fulfillment(of: [restarted], timeout: 1)
 
     simulatePeerDiscovery(advertising: peerNonce, on: central)
-    central.onConnected?()
+    central.onConnected?(peerId)
 
     await fulfillment(of: [connected], timeout: 1)
 
@@ -59,7 +60,6 @@ final class ExchangeSessionTests: XCTestCase {
         .startAdvertising(nonce: collidingLocalNonce),
         .stop,
         .startAdvertising(nonce: freshLocalNonce),
-        .stop,
       ],
     )
   }
@@ -107,9 +107,10 @@ final class ExchangeSessionTests: XCTestCase {
     )
   }
 
-  func test_distinctNoncesSucessfullyResolveARole() async throws {
+  func test_distinctNoncesDontRestartTheHandshake() async throws {
     let peerNonce: UInt32 = 1
     let localNonce: UInt32 = 2
+    let peerId = UUID()
 
     let (session, central, peripheral) = makeSUT(
       localNonces: [localNonce],
@@ -129,7 +130,7 @@ final class ExchangeSessionTests: XCTestCase {
     try await session.start(payload: Data())
 
     simulatePeerDiscovery(advertising: peerNonce, on: central)
-    central.onConnected?()
+    central.onConnected?(peerId)
 
     await fulfillment(of: [connected], timeout: 1)
 
@@ -143,7 +144,6 @@ final class ExchangeSessionTests: XCTestCase {
       peripheral.calls,
       [
         .startAdvertising(nonce: localNonce),
-        .stop,
       ],
     )
   }
@@ -176,6 +176,7 @@ extension ExchangeSessionTests {
 
   func test_cancelsTimer_afterConnectingWithPeer() async throws {
     let localNonce: UInt32 = 2
+    let peerId = UUID()
 
     let clock = TestClock()
     let (session, central, _) = makeSUT(localNonces: [localNonce], clock: clock)
@@ -198,7 +199,7 @@ extension ExchangeSessionTests {
 
     try await session.start(payload: Data())
 
-    central.onConnected?()
+    central.onConnected?(peerId)
 
     await clock.advance(by: .seconds(60))
 
@@ -209,114 +210,120 @@ extension ExchangeSessionTests {
 extension ExchangeSessionTests {
   func test_desiredRangeNotReached_centralSide_doesntSendPayload() async throws {
     let payload = Data("payload".utf8)
+    let peerId = UUID()
 
     let (central, _) = try await rangeTestSetup(
       localDeviceType: .central,
+      peerId: peerId,
       distanceThreshold: 0.5,
       mockedDistance: 1.5,
       payload: payload,
     )
 
     XCTAssertFalse(
-      central.calls.contains(.send(payload: payload)),
+      central.calls.contains(.send(payload: payload, to: peerId)),
       "The central sent the payload out of range.",
     )
   }
 
   func test_desiredRangeNotReached_peripheralSide_doesntSendPayload() async throws {
     let payload = Data("payload".utf8)
+    let peerId = UUID()
 
     let (_, peripheral) = try await rangeTestSetup(
       localDeviceType: .peripheral,
+      peerId: peerId,
       distanceThreshold: 0.5,
       mockedDistance: 1.5,
       payload: payload,
     )
 
     XCTAssertFalse(
-      peripheral.calls.contains(.send(payload: payload)),
+      peripheral.calls.contains(.send(payload: payload, to: peerId)),
       "The peripheral sent the payload out of range.",
     )
   }
 
   func test_reachesDesiredRange_centralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
+    let peerId = UUID()
 
     let (central, _) = try await rangeTestSetup(
       localDeviceType: .central,
+      peerId: peerId,
       distanceThreshold: 0.5,
       mockedDistance: 0.5,
       payload: payload,
     )
 
     XCTAssertTrue(
-      central.calls.contains(.send(payload: payload)),
+      central.calls.contains(.send(payload: payload, to: peerId)),
       "The central didn't send the payload when in range.",
     )
   }
 
   func test_reachesDesiredRange_peripheralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
+    let peerId = UUID()
 
     let (_, peripheral) = try await rangeTestSetup(
       localDeviceType: .peripheral,
+      peerId: peerId,
       distanceThreshold: 0.5,
       mockedDistance: 0.5,
       payload: payload,
     )
 
     XCTAssertTrue(
-      peripheral.calls.contains(.send(payload: payload)),
+      peripheral.calls.contains(.send(payload: payload, to: peerId)),
       "The peripheral didn't send the payload when in range.",
     )
   }
 
   func test_belowDesiredRange_centralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
+    let peerId = UUID()
 
     let (central, _) = try await rangeTestSetup(
       localDeviceType: .central,
+      peerId: peerId,
       distanceThreshold: 0.5,
       mockedDistance: 0.4,
       payload: payload,
     )
 
     XCTAssertTrue(
-      central.calls.contains(.send(payload: payload)),
+      central.calls.contains(.send(payload: payload, to: peerId)),
       "The central didn't send the payload when in range.",
     )
   }
 
   func test_belowDesiredRange_peripheralSide_sendsPayload() async throws {
     let payload = Data("payload".utf8)
+    let peerId = UUID()
 
     let (_, peripheral) = try await rangeTestSetup(
       localDeviceType: .peripheral,
+      peerId: peerId,
       distanceThreshold: 0.5,
       mockedDistance: 0.4,
       payload: payload,
     )
 
     XCTAssertTrue(
-      peripheral.calls.contains(.send(payload: payload)),
+      peripheral.calls.contains(.send(payload: payload, to: peerId)),
       "The peripheral didn't send the payload when in range.",
     )
   }
 
   private func rangeTestSetup(
     localDeviceType: ConnectionRole,
+    peerId: UUID,
     distanceThreshold: Float,
     mockedDistance: Float,
     payload: Data,
   ) async throws -> (BLECentralSpy, BLEPeripheralSpy) {
-    let localNonce: UInt32 = localDeviceType == .central ? 2 : 1
-    let peerNonce: UInt32 = localDeviceType == .central ? 1 : 2
-
-    let ranger = MockRanger()
-
     let (session, central, peripheral) = makeSUT(
-      localNonces: [localNonce],
-      ranger: ranger,
       configuration: .init(distanceThreshold: distanceThreshold),
     )
 
@@ -325,7 +332,8 @@ extension ExchangeSessionTests {
     let events = session.events.receive()
     let observer = Task {
       for await event in events {
-        guard case let .distance(distance) = event else { continue }
+        guard case let .distance(id, distance) = event else { continue }
+        XCTAssertEqual(id, peerId)
         XCTAssertEqual(distance, mockedDistance)
         ranged.fulfill()
       }
@@ -334,10 +342,15 @@ extension ExchangeSessionTests {
 
     try await session.start(payload: payload)
 
-    simulatePeerDiscovery(advertising: peerNonce, on: central)
-    central.onConnected?()
+    switch localDeviceType {
+    case .central:
+      central.onConnected?(peerId)
+      central.onDistance?(mockedDistance, peerId)
 
-    ranger.onDistance?(mockedDistance)
+    case .peripheral:
+      peripheral.onConnected?(peerId)
+      peripheral.onDistance?(mockedDistance, peerId)
+    }
 
     await fulfillment(of: [ranged], timeout: 1)
 
@@ -403,14 +416,13 @@ extension ExchangeSessionTests {
   func test_dataExchange_happyPath() async throws {
     let localNonce: UInt32 = 2
     let peerNonce: UInt32 = 1
+    let peerId = UUID()
     let localPayload = Data(Array(repeating: UInt8(ascii: "L"), count: 10))
     let peerPayload = Data(Array(repeating: UInt8(ascii: "P"), count: 10))
     let distance: Float = 0.1
 
-    let ranger = MockRanger()
     let (session, central, peripheral) = makeSUT(
       localNonces: [localNonce],
-      ranger: ranger,
       configuration: .init(distanceThreshold: 0.5),
     )
 
@@ -430,9 +442,9 @@ extension ExchangeSessionTests {
     try await session.start(payload: localPayload)
 
     simulatePeerDiscovery(advertising: peerNonce, on: central)
-    central.onConnected?()
+    central.onConnected?(peerId)
 
-    ranger.onDistance?(distance)
+    central.onDistance?(distance, peerId)
 
     central.onSendProgress?(
       TransferProgress(bytes: 0, total: localPayload.count),
@@ -455,8 +467,9 @@ extension ExchangeSessionTests {
     XCTAssertEqual(
       receivedEvents.withLock { $0 },
       [
-        .connected,
-        .distance(distance),
+        .connected(peerId),
+        .distance(peerId, distance),
+        .choosen(peerId),
         .progress(0),
         .progress(0),
         .progress(0.5),
@@ -469,7 +482,7 @@ extension ExchangeSessionTests {
       central.calls,
       [
         .startScanning(nonce: localNonce),
-        .send(payload: localPayload),
+        .send(payload: localPayload, to: peerId),
         .confirmSent,
         .stop,
       ],
@@ -489,7 +502,6 @@ extension ExchangeSessionTests {
 extension ExchangeSessionTests {
   private func makeSUT(
     localNonces: [UInt32] = [1],
-    ranger: MockRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
     clock: any Clock<Duration> = .continuous,
@@ -501,7 +513,6 @@ extension ExchangeSessionTests {
 
     let session = ExchangeSession(
       configuration: configuration,
-      ranger: ranger,
       roleResolver: RoleResolver(
         makeNonce: {
           remaining.withLock { values -> UInt32 in
@@ -540,8 +551,9 @@ extension ExchangeSessionTests {
       )
     }
 
-    central.onRoleReceived?(
-      RoleResolver.resolve(myNonce: localNonce, peerNonce: peerNonce),
-    )
+    guard RoleResolver.resolve(myNonce: localNonce, peerNonce: peerNonce) == nil
+    else { return }
+
+    central.onNonceConflict?()
   }
 }

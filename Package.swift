@@ -13,7 +13,7 @@ let package = Package(
   dependencies: [
     .package(
       url: "https://github.com/nordicsemi/IOS-CoreBluetooth-Mock",
-      branch: "main",
+      branch: "1.1.1",
     ),
     .package(
       url: "https://github.com/pointfreeco/swift-clocks",

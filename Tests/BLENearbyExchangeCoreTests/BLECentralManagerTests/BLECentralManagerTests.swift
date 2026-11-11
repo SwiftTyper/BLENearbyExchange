@@ -12,19 +12,13 @@ final class BLECentralManagerTests: XCTestCase {
 
     let central = await makeSUT(peer: peer)
 
-    let roleReceived = expectation(description: "a role was resolved")
     let connected = expectation(description: "the peer connected")
 
-    central.onRoleReceived = { role in
-      XCTAssertEqual(role, .central)
-      roleReceived.fulfill()
-    }
-
-    central.onConnected = { connected.fulfill() }
+    central.onConnected = { _ in connected.fulfill() }
 
     central.startScanning(nonce: 2)
 
-    await fulfillment(of: [roleReceived, connected], timeout: 2)
+    await fulfillment(of: [connected], timeout: 2)
 
     XCTAssertTrue(peer.isConnected)
   }
@@ -34,20 +28,14 @@ final class BLECentralManagerTests: XCTestCase {
 
     let central = await makeSUT(peer: peer)
 
-    let roleReceived = expectation(description: "a role was resolved")
     let notConnected = expectation(description: "the peer didn't connect")
     notConnected.isInverted = true
 
-    central.onRoleReceived = { role in
-      XCTAssertEqual(role, .peripheral)
-      roleReceived.fulfill()
-    }
-
-    central.onConnected = { notConnected.fulfill() }
+    central.onConnected = { _ in notConnected.fulfill() }
 
     central.startScanning(nonce: 2)
 
-    await fulfillment(of: [roleReceived, notConnected], timeout: 1)
+    await fulfillment(of: [notConnected], timeout: 1)
   }
 
   func test_identicalNonceIsReportedAsACollision() async {
@@ -57,31 +45,13 @@ final class BLECentralManagerTests: XCTestCase {
 
     let roleReceived = expectation(description: "a role was resolved")
 
-    central.onRoleReceived = { role in
-      XCTAssertNil(role)
+    central.onNonceConflict = {
       roleReceived.fulfill()
     }
 
     central.startScanning(nonce: 2)
 
     await fulfillment(of: [roleReceived], timeout: 2)
-  }
-
-  func test_advertisementWithoutANonceIsIgnored() async {
-    let peer = MockPeripheralSpy(advertisedName: "not a nonce")
-
-    let central = await makeSUT(peer: peer)
-
-    let roleReceived = expectation(description: "a role was resolved")
-    roleReceived.isInverted = true
-
-    central.onRoleReceived = { _ in
-      roleReceived.fulfill()
-    }
-
-    central.startScanning(nonce: 2)
-
-    await fulfillment(of: [roleReceived], timeout: 1)
   }
 }
 
@@ -92,8 +62,6 @@ extension BLECentralManagerTests {
     let centralTokenData = Data("local-token".utf8)
     let ranger = MockRanger(localToken: centralTokenData)
     let central = await makeSUT(peer: peer, ranger: ranger)
-
-    central.onRoleReceived = { _ in }
 
     let peerReceivedHandshake = expectation(description: "peer received handshake")
 
@@ -132,8 +100,6 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer, ranger: ranger)
 
-    central.onRoleReceived = { _ in }
-
     let handshakeFailed = expectation(description: "the handshake failed")
 
     central.onError = { error in
@@ -159,8 +125,6 @@ extension BLECentralManagerTests {
     ranger.rangingError = MockRanger.Failure.rangingUnavailable
 
     let central = await makeSUT(peer: peer, ranger: ranger)
-
-    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -194,8 +158,6 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
 
     let payload = Data((0 ..< 500).map { UInt8($0 % 251) })
@@ -217,7 +179,7 @@ extension BLECentralManagerTests {
       sendCompleted.fulfill()
     }
 
-    central.send(payload: payload)
+    central.send(payload: payload, to: peer.spec.identifier)
 
     await fulfillment(of: [payloadDelivered, sendCompleted], timeout: 2)
   }
@@ -227,9 +189,9 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
+
+    central.selectPeer(peer.spec.identifier)
 
     let payload = Data((0 ..< 500).map { UInt8($0 % 251) })
 
@@ -269,9 +231,9 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
+
+    central.selectPeer(peer.spec.identifier)
 
     let receiptConfirmed = expectation(description: "the peer confirmed receipt")
 
@@ -291,9 +253,9 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
+
+    central.selectPeer(peer.spec.identifier)
 
     let exchangeFailed = expectation(description: "the exchange failed")
 
@@ -312,9 +274,9 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
+
+    central.selectPeer(peer.spec.identifier)
 
     let exchangeFailed = expectation(description: "the exchange failed")
 
@@ -333,9 +295,9 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
+
+    central.selectPeer(peer.spec.identifier)
 
     let terminateSent = expectation(description: "the terminate control was written")
 
@@ -352,8 +314,6 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
-
-    central.onRoleReceived = { _ in }
 
     await connect(central, nonce: 2)
 
@@ -374,8 +334,6 @@ extension BLECentralManagerTests {
 
     let central = await makeSUT(peer: peer)
 
-    central.onRoleReceived = { _ in }
-
     await connect(central, nonce: 2)
 
     let peerDisconnected = expectation(description: "the peer disconnected")
@@ -395,7 +353,7 @@ extension BLECentralManagerTests {
 extension BLECentralManagerTests {
   private func makeSUT(
     peer: MockPeripheralSpy,
-    ranger: MockRanger = MockRanger(),
+    ranger: @autoclosure @escaping () -> MockRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
   ) async -> BLECentralManager {
@@ -406,7 +364,7 @@ extension BLECentralManagerTests {
 
     let central = BLECentralManager(
       configuration: .init(),
-      ranger: ranger,
+      makeRanger: ranger,
       makeCipher: { PlainTextCipher() },
       forceMock: true,
     )
@@ -434,7 +392,7 @@ extension BLECentralManagerTests {
   ) async {
     let connected = expectation(description: "the peer connected")
 
-    central.onConnected = {
+    central.onConnected = { _ in
       connected.fulfill()
     }
 

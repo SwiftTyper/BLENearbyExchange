@@ -13,11 +13,12 @@ extension BLECentralManager {
 
     onStateChange = { _ in fail("onStateChange") }
     onPayloadReceived = { _ in fail("onPayloadReceived") }
-    onRoleReceived = { _ in fail("onRoleReceived") }
     onPeerReceivedDataConfirmation = { fail("onPeerReceivedDataConfirmation") }
     onError = { fail("onError(\($0))") }
-    onConnected = { fail("onConnected") }
+    onConnected = { _ in fail("onConnected") }
     onSendProgress = { _ in fail("onSendProgress") }
     onReceiveProgress = { _ in fail("onReceiveProgress") }
+    onDistance = { _, _ in fail("onDistance") }
+    onNonceConflict = { fail("onNonceConflict") }
   }
 }

@@ -6,7 +6,7 @@ import Foundation
 final class BLECentralSpy: BLECentralInterface {
   enum Call: Equatable {
     case startScanning(nonce: UInt32)
-    case send(payload: Data)
+    case send(payload: Data, to: UUID)
     case confirmSent
     case sendTerminate(GATT.Control)
     case stop
@@ -18,12 +18,13 @@ final class BLECentralSpy: BLECentralInterface {
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
-  var onRoleReceived: ((_ role: ConnectionRole?) -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
   var onError: ((ExchangeError) -> Void)?
-  var onConnected: (() -> Void)?
+  var onConnected: ((_ peerId: UUID) -> Void)?
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
+  var onDistance: ((Float, UUID) -> Void)?
+  var onNonceConflict: (() -> Void)?
 
   func startScanning(nonce: UInt32) {
     calls.append(.startScanning(nonce: nonce))
@@ -31,8 +32,8 @@ final class BLECentralSpy: BLECentralInterface {
     onStartScanning?(nonce)
   }
 
-  func send(payload: Data) {
-    calls.append(.send(payload: payload))
+  func send(payload: Data, to peerId: UUID) {
+    calls.append(.send(payload: payload, to: peerId))
   }
 
   func confirmSent() {

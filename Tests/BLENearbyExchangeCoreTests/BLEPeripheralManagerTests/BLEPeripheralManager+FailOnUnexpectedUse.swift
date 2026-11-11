@@ -13,10 +13,10 @@ extension BLEPeripheralManager {
 
     onStateChange = { _ in fail("onStateChange") }
     onPayloadReceived = { _ in fail("onPayloadReceived") }
-    onRoleConfirmed = { fail("onRoleConfirmed") }
+    onDistance = { _, _ in fail("onDistance") }
     onPeerReceivedDataConfirmation = { fail("onPeerReceivedDataConfirmation") }
     onError = { fail("onError(\($0))") }
-    onConnected = { fail("onConnected") }
+    onConnected = { _ in fail("onConnected") }
     onSendProgress = { _ in fail("onSendProgress") }
     onReceiveProgress = { _ in fail("onReceiveProgress") }
   }

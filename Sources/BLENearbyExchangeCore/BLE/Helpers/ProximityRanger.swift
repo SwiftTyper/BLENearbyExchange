@@ -1,4 +1,5 @@
 import Foundation
+import IssueReporting
 
 #if canImport(NearbyInteraction)
   import NearbyInteraction
@@ -9,7 +10,8 @@ public class ProximityRanger: NSObject {
   var onDistance: ((Float) -> Void)?
   var onError: ((Error) -> Void)?
 
-  var isSupported: Bool {
+  static var isSupported: Bool {
+    guard !isTesting else { return true }
     #if !os(macOS)
       return NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
     #else

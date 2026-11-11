@@ -10,7 +10,6 @@ public final class ExchangeSession: TimeoutController {
 
   private let configuration: NearbyExchange.Configuration
   private let roleResolver: RoleResolver
-  private var ranger: ProximityRanger?
   private var peripheral: BLEPeripheralInterface?
   private var central: BLECentralInterface?
 
@@ -22,28 +21,22 @@ public final class ExchangeSession: TimeoutController {
   private var didPeerReceive = false
   private var didReceive = false
   private var didComplete = false
-  private var distanceAquired = false
 
   public convenience init(
     configuration: NearbyExchange.Configuration,
   ) {
-    let ranger = ProximityRanger()
-
     let peripheral = BLEPeripheralManager(
       configuration: configuration,
-      ranger: ranger,
-      forceMock: false,
+      makeRanger: { ProximityRanger() },
     )
 
     let central = BLECentralManager(
       configuration: configuration,
-      ranger: ranger,
-      forceMock: false,
+      makeRanger: { ProximityRanger() },
     )
 
     self.init(
       configuration: configuration,
-      ranger: ranger,
       roleResolver: RoleResolver(),
       central: central,
       peripheral: peripheral,
@@ -53,7 +46,6 @@ public final class ExchangeSession: TimeoutController {
 
   init(
     configuration: NearbyExchange.Configuration,
-    ranger: ProximityRanger,
     roleResolver: RoleResolver,
     central: any BLECentralInterface,
     peripheral: any BLEPeripheralInterface,
@@ -61,7 +53,6 @@ public final class ExchangeSession: TimeoutController {
   ) {
     self.configuration = configuration
     self.roleResolver = roleResolver
-    self.ranger = ranger
     self.peripheral = peripheral
     self.central = central
 
@@ -77,7 +68,7 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func start(payload: Data) async throws {
-    guard ranger?.isSupported == true
+    guard ProximityRanger.isSupported
     else { throw ExchangeError.unsupported }
 
     try await waitForPoweredOn(peripheralState)
@@ -104,7 +95,6 @@ public final class ExchangeSession: TimeoutController {
     central?.stop()
 
     role = nil
-    distanceAquired = false
 
     try await beginHandshake()
   }
@@ -120,7 +110,8 @@ public final class ExchangeSession: TimeoutController {
     didComplete = true
 
     cancelTimer()
-    ranger?.stop()
+    // HANDLE
+//    ranger?.stop()
 
     switch error {
     case .cancelledByPeer, .failedOnPeer, .disconnected:
@@ -178,7 +169,6 @@ public final class ExchangeSession: TimeoutController {
   }
 
   public func stop() {
-    ranger?.stop()
     peripheral?.stop()
     central?.stop()
 
@@ -189,55 +179,25 @@ public final class ExchangeSession: TimeoutController {
     didPeerReceive = false
     didReceive = false
     didComplete = false
-    distanceAquired = false
     sent = TransferProgress()
     received = TransferProgress()
   }
 
   private func wireCallbacks() {
-    peripheral?.onRoleConfirmed = { [weak self] in
-      self?.central?.stop()
-      self?.role = .peripheral
-    }
-    central?.onRoleReceived = { [weak self] role in
-      switch role {
-      case .central:
-        self?.peripheral?.stop()
-
-      case .peripheral:
-        break
-
-      case nil:
-        Task {
-          do {
-            try await self?.restartHandshake()
-          } catch {
-            self?.fail(ExchangeError(error))
-          }
+    central?.onNonceConflict = { [weak self] in
+      Task {
+        do {
+          try await self?.restartHandshake()
+        } catch {
+          self?.fail(ExchangeError(error))
         }
       }
-      self?.role = role
     }
-    ranger?.onDistance = { [weak self] distance in
-      guard let self else { return }
-
-      events.send(.distance(distance))
-
-      guard
-        let role,
-        distance <= configuration.distanceThreshold,
-        !distanceAquired
-      else { return }
-
-      distanceAquired = true
-
-      switch role {
-      case .central:
-        central?.send(payload: payload)
-
-      case .peripheral:
-        peripheral?.send(payload: payload)
-      }
+    central?.onDistance = { [weak self] distance, uuid in
+      self?.onDistance(distance: distance, peerId: uuid, role: .central)
+    }
+    peripheral?.onDistance = { [weak self] distance, uuid in
+      self?.onDistance(distance: distance, peerId: uuid, role: .peripheral)
     }
     central?.onPayloadReceived = { [weak self] data in
       self?.markReceived(data)
@@ -257,14 +217,11 @@ public final class ExchangeSession: TimeoutController {
     peripheral?.onError = { [weak self] error in
       self?.fail(error)
     }
-    ranger?.onError = { [weak self] error in
-      self?.fail(.rangingFailed(error.localizedDescription))
+    central?.onConnected = { [weak self] peerId in
+      self?.markConnected(peerId: peerId)
     }
-    central?.onConnected = { [weak self] in
-      self?.markConnected()
-    }
-    peripheral?.onConnected = { [weak self] in
-      self?.markConnected()
+    peripheral?.onConnected = { [weak self] peerId in
+      self?.markConnected(peerId: peerId)
     }
     central?.onSendProgress = { [weak self] in
       self?.sent = $0
@@ -284,6 +241,29 @@ public final class ExchangeSession: TimeoutController {
     }
   }
 
+  private func onDistance(distance: Float, peerId: UUID, role: ConnectionRole) {
+    events.send(.distance(peerId, distance))
+
+    guard
+      self.role == nil,
+      distance <= configuration.distanceThreshold
+    else { return }
+
+    self.role = role
+
+    events.send(.choosen(peerId))
+
+    switch role {
+    case .central:
+      peripheral?.stop()
+      central?.send(payload: payload, to: peerId)
+
+    case .peripheral:
+      central?.stop()
+      peripheral?.send(payload: payload, to: peerId)
+    }
+  }
+
   private func emitProgress() {
     let total = sent.total + received.total
     guard total > 0 else { return }
@@ -294,9 +274,9 @@ public final class ExchangeSession: TimeoutController {
     events.send(.progress(progress))
   }
 
-  private func markConnected() {
+  private func markConnected(peerId: UUID) {
     cancelTimer()
-    events.send(.connected)
+    events.send(.connected(peerId))
   }
 
   private func markPeerReceived() {
