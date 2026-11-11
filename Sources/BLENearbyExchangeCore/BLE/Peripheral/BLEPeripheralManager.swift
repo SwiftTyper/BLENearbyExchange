@@ -10,7 +10,7 @@ extension BLEPeripheralManager {
     var communicationCipher: any MessageCipherInterface
     var reassembler: Reassembler
     var subscribedCharacteristics: Set<String> = []
-    
+
     func invalidate() {
       ranger.stop()
     }
@@ -27,9 +27,9 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
   private var controlChar: CBMMutableCharacteristic!
   private var advertisingContinuation: CheckedContinuation<Void, Error>?
   private var serviceContinuation: CheckedContinuation<Void, Error>?
-  
+
   private var centrals: [UUID: PeerSession] = [:]
-  private var activeSessionId: UUID? = nil
+  private var activeSessionId: UUID?
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
@@ -166,15 +166,15 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
     onSendProgress = nil
     onReceiveProgress = nil
   }
-  
+
   func selectPeer(_ peerId: UUID) {
     activeSessionId = peerId
     manager.stopAdvertising()
-    
+
     centrals[peerId]?.ranger.stop()
-    
+
     let ids = centrals.map(\.key)
-    
+
     for id in ids where id != peerId {
       centrals[id]?.invalidate()
       centrals[id] = nil

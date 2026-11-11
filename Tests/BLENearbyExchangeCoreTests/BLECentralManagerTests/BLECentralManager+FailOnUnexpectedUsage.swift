@@ -18,7 +18,7 @@ extension BLECentralManager {
     onConnected = { _ in fail("onConnected") }
     onSendProgress = { _ in fail("onSendProgress") }
     onReceiveProgress = { _ in fail("onReceiveProgress") }
-    onDistance = { _,_  in fail("onDistance") }
+    onDistance = { _, _ in fail("onDistance") }
     onNonceConflict = { fail("onNonceConflict") }
   }
 }

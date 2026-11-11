@@ -24,7 +24,7 @@ final class NearbyExchangePresenter {
   private var eventsTask: Task<Void, Never>?
   private var startTask: Task<Void, Never>?
   private var received: Data?
-  private var distances: [UUID:Float] = [:]
+  private var distances: [UUID: Float] = [:]
 
   init(configuration: NearbyExchange.Configuration) {
     self.configuration = configuration
@@ -86,12 +86,12 @@ final class NearbyExchangePresenter {
 
     case let .distance(peerId, distance):
       distances[peerId] = distance
-      
+
       guard let closest = distances.values.sorted().first
       else { return }
-      
+
       phase = .approaching(distance: closest)
-      
+
     case .choosen:
       phase = .exchanging(progress: 0)
       distances = [:]

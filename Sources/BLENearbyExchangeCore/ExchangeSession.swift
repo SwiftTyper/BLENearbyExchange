@@ -27,12 +27,12 @@ public final class ExchangeSession: TimeoutController {
   ) {
     let peripheral = BLEPeripheralManager(
       configuration: configuration,
-      makeRanger: { ProximityRanger() }
+      makeRanger: { ProximityRanger() },
     )
 
     let central = BLECentralManager(
       configuration: configuration,
-      makeRanger: { ProximityRanger() }
+      makeRanger: { ProximityRanger() },
     )
 
     self.init(
@@ -240,7 +240,7 @@ public final class ExchangeSession: TimeoutController {
       self?.emitProgress()
     }
   }
-  
+
   private func onDistance(distance: Float, peerId: UUID, role: ConnectionRole) {
     events.send(.distance(peerId, distance))
 
@@ -250,17 +250,17 @@ public final class ExchangeSession: TimeoutController {
     else { return }
 
     self.role = role
-    
+
     events.send(.choosen(peerId))
 
     switch role {
     case .central:
       peripheral?.stop()
-      central?.send(payload: self.payload, to: peerId)
+      central?.send(payload: payload, to: peerId)
 
     case .peripheral:
       central?.stop()
-      peripheral?.send(payload: self.payload, to: peerId)
+      peripheral?.send(payload: payload, to: peerId)
     }
   }
 

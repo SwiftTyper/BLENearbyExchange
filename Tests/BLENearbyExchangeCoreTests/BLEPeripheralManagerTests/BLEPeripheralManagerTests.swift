@@ -94,11 +94,11 @@ final class BLEPeripheralManagerTests: XCTestCase {
     peripheral.onReceiveProgress = { _ in }
 
     let peer = MockCentralSpy()
-    
+
     let characterisitcs = try await connect(peer, to: peripheral)
-    
+
     peripheral.selectPeer(peer.spec.identifier)
-    
+
     let payloadChar = try characterisitcs.find(by: GATT.payload.cbuuid)
 
     let payload = Data(repeating: 0x00, count: 4000)
@@ -123,9 +123,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
-    
+
     peripheral.selectPeer(peer.spec.identifier)
-    
+
     let controlChar = try characterisitcs.find(by: GATT.control.cbuuid)
 
     let doneCommendSent = expectation(description: "done command sent")
@@ -141,7 +141,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
         XCTFail("\(failure.localizedDescription)")
       }
     }
-    
+
     let receivedDoneCommend = expectation(description: "received done command")
 
     peripheral.onPeerReceivedDataConfirmation = {
@@ -282,7 +282,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     try await connect(peer, to: peripheral)
-    
+
     peripheral.selectPeer(peer.spec.identifier)
 
     let errorExpectation = expectation(description: "error")
@@ -302,9 +302,9 @@ final class BLEPeripheralManagerTests: XCTestCase {
     let peer = MockCentralSpy()
 
     let characterisitcs = try await connect(peer, to: peripheral)
-    
+
     peripheral.selectPeer(peer.spec.identifier)
-    
+
     let controlCharacteristic = try characterisitcs.find(by: GATT.control.cbuuid)
 
     let errorExpectation = expectation(description: "error")

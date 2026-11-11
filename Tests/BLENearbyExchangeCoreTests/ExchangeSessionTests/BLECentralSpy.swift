@@ -31,7 +31,7 @@ final class BLECentralSpy: BLECentralInterface {
     scanningNonce = nonce
     onStartScanning?(nonce)
   }
-  
+
   func send(payload: Data, to peerId: UUID) {
     calls.append(.send(payload: payload, to: peerId))
   }

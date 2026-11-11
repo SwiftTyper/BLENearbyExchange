@@ -26,11 +26,11 @@ final class BLEPeripheralSpy: BLEPeripheralInterface {
   func startAdvertising(nonce: UInt32) async throws {
     calls.append(.startAdvertising(nonce: nonce))
   }
-  
+
   func send(payload: Data, to peerId: UUID) {
     calls.append(.send(payload: payload, to: peerId))
   }
-  
+
   func confirmSent() {
     calls.append(.confirmSent)
   }

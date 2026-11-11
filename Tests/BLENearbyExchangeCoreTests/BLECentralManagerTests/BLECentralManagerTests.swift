@@ -44,7 +44,7 @@ final class BLECentralManagerTests: XCTestCase {
     let central = await makeSUT(peer: peer)
 
     let roleReceived = expectation(description: "a role was resolved")
-    
+
     central.onNonceConflict = {
       roleReceived.fulfill()
     }
@@ -190,7 +190,7 @@ extension BLECentralManagerTests {
     let central = await makeSUT(peer: peer)
 
     await connect(central, nonce: 2)
-    
+
     central.selectPeer(peer.spec.identifier)
 
     let payload = Data((0 ..< 500).map { UInt8($0 % 251) })
@@ -232,7 +232,7 @@ extension BLECentralManagerTests {
     let central = await makeSUT(peer: peer)
 
     await connect(central, nonce: 2)
-    
+
     central.selectPeer(peer.spec.identifier)
 
     let receiptConfirmed = expectation(description: "the peer confirmed receipt")
@@ -254,7 +254,7 @@ extension BLECentralManagerTests {
     let central = await makeSUT(peer: peer)
 
     await connect(central, nonce: 2)
-    
+
     central.selectPeer(peer.spec.identifier)
 
     let exchangeFailed = expectation(description: "the exchange failed")
@@ -275,7 +275,7 @@ extension BLECentralManagerTests {
     let central = await makeSUT(peer: peer)
 
     await connect(central, nonce: 2)
-    
+
     central.selectPeer(peer.spec.identifier)
 
     let exchangeFailed = expectation(description: "the exchange failed")
@@ -294,7 +294,7 @@ extension BLECentralManagerTests {
     let peer = MockPeripheralSpy(nonce: 1)
 
     let central = await makeSUT(peer: peer)
-    
+
     await connect(central, nonce: 2)
 
     central.selectPeer(peer.spec.identifier)
@@ -407,7 +407,7 @@ extension BLECentralManagerTests {
     central.startScanning(nonce: nonce)
 
     await fulfillment(of: [connected], timeout: 2)
-    
+
     central.onError = nil
   }
 }
