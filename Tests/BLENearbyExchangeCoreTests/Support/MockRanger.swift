@@ -13,10 +13,6 @@ final class MockRanger: ProximityRanger {
     self.localToken = localToken
   }
 
-  override var isSupported: Bool {
-    true
-  }
-
   override func localDiscoveryToken() -> Data? {
     localToken
   }

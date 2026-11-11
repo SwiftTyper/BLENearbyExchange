@@ -27,14 +27,12 @@ public final class ExchangeSession: TimeoutController {
   ) {
     let peripheral = BLEPeripheralManager(
       configuration: configuration,
-      makeRanger: ProximityRanger(),
-      forceMock: false,
+      makeRanger: { ProximityRanger() }
     )
 
     let central = BLECentralManager(
       configuration: configuration,
-      makeRanger: ProximityRanger(),
-      forceMock: false,
+      makeRanger: { ProximityRanger() }
     )
 
     self.init(

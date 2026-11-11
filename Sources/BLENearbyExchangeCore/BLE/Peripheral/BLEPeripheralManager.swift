@@ -50,9 +50,9 @@ final class BLEPeripheralManager: NSObject, BLEPeripheralInterface {
 
   init(
     configuration: NearbyExchange.Configuration,
-    makeRanger: @autoclosure @escaping () -> ProximityRanger,
+    makeRanger: @escaping () -> ProximityRanger,
     makeCipher: @escaping () -> any MessageCipherInterface = { MessageCipher() },
-    forceMock: Bool,
+    forceMock: Bool = false,
   ) {
     self.configuration = configuration
     self.makeRanger = makeRanger

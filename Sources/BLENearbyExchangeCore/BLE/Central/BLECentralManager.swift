@@ -48,7 +48,7 @@ final class BLECentralManager: NSObject, BLECentralInterface {
 
   init(
     configuration: NearbyExchange.Configuration,
-    makeRanger: @autoclosure @escaping () -> ProximityRanger,
+    makeRanger: @escaping () -> ProximityRanger,
     makeCipher: @escaping () -> any MessageCipherInterface = { MessageCipher() },
     forceMock: Bool = false,
   ) {
@@ -117,19 +117,23 @@ final class BLECentralManager: NSObject, BLECentralInterface {
     onNonceConflict = nil
   }
 
-  func send(payload: Data, to peerId: UUID) {
+  func selectPeer(_ peerId: UUID) {
     activeSessionId = peerId
     manager.stopScan()
-    
+
     self.peripherals[peerId]?.ranger.stop()
 
     let ids = self.peripherals.map(\.key)
-    
+
     for id in ids where id != peerId {
       self.peripherals[id]?.invalidate()
       self.peripherals[id] = nil
     }
-    
+  }
+
+  func send(payload: Data, to peerId: UUID) {
+    selectPeer(peerId)
+
     guard
       let peripheral = self.peripherals[peerId]?.peripheral,
       let payloadChar = self.peripherals[peerId]?.characterisitcs?.first(where: { $0.uuid == GATT.payload.cbuuid }),
@@ -197,25 +201,24 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
       myNonce: nonce,
       peerNonce: peerNonce,
     )
-
-    if role == nil {
+    
+    switch role {
+    case nil:
       onNonceConflict?()
-      return
-    }
-
-    if role == .central {
+      
+    case .central:
       central.connect(peripheral)
       peripheral.delegate = self
       
       let ranger = makeRanger()
       
-      ranger.onDistance = { distance in
-        self.onDistance?(distance, peripheral.identifier)
+      ranger.onDistance = { [weak self] distance in
+        self?.onDistance?(distance, peripheral.identifier)
       }
-      
-      ranger.onError = { error in
+
+      ranger.onError = { [weak self] error in
         // TODO: think about what to do if one session fails to start
-        self.onError?(.rangingFailed(error.localizedDescription))
+        self?.onError?(.rangingFailed(error.localizedDescription))
       }
       
       self.peripherals[peripheral.identifier] = .init(
@@ -224,6 +227,9 @@ extension BLECentralManager: @BLEActor CBMCentralManagerDelegate {
         communicationCipher: makeCipher(),
         reassembler: Reassembler()
       )
+      
+    default:
+      break
     }
   }
 

@@ -6,7 +6,7 @@ import Foundation
 final class BLEPeripheralSpy: BLEPeripheralInterface {
   enum Call: Equatable {
     case startAdvertising(nonce: UInt32)
-    case send(payload: Data)
+    case send(payload: Data, to: UUID)
     case confirmSent
     case sendTerminate(GATT.Control)
     case stop
@@ -16,21 +16,21 @@ final class BLEPeripheralSpy: BLEPeripheralInterface {
 
   var onStateChange: ((CBMManagerState) -> Void)?
   var onPayloadReceived: ((Data) -> Void)?
-  var onRoleConfirmed: (() -> Void)?
   var onPeerReceivedDataConfirmation: (() -> Void)?
   var onError: ((ExchangeError) -> Void)?
-  var onConnected: (() -> Void)?
+  var onConnected: ((UUID) -> Void)?
   var onSendProgress: ((TransferProgress) -> Void)?
   var onReceiveProgress: ((TransferProgress) -> Void)?
+  var onDistance: ((Float, UUID) -> Void)?
 
   func startAdvertising(nonce: UInt32) async throws {
     calls.append(.startAdvertising(nonce: nonce))
   }
-
-  func send(payload: Data) {
-    calls.append(.send(payload: payload))
+  
+  func send(payload: Data, to peerId: UUID) {
+    calls.append(.send(payload: payload, to: peerId))
   }
-
+  
   func confirmSent() {
     calls.append(.confirmSent)
   }

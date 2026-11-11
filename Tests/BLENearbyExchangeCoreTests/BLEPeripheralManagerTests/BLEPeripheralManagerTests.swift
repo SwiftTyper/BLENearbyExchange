@@ -29,7 +29,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
     let terminateSent = expectation(description: "the terminate control was sent")
 
-    peripheral.send(payload: payload)
+    peripheral.send(payload: payload, to: peer.spec.identifier)
 
     peripheral.sendTerminate(.cancelled) {
       terminateSent.fulfill()
@@ -74,7 +74,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       fullyReceivedPayload.fulfill()
     }
 
-    peripheral.send(payload: payload)
+    peripheral.send(payload: payload, to: peer.spec.identifier)
 
     await fulfillment(of: [fullyEnqueued, fullyReceivedPayload], timeout: 5.0)
 
@@ -166,7 +166,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       transferStarted.fulfill()
     }
 
-    peripheral.send(payload: outgoingPayload)
+    peripheral.send(payload: outgoingPayload, to: peer.spec.identifier)
 
     await fulfillment(of: [transferStarted], timeout: 2.0)
 
@@ -225,7 +225,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
       transferStarted.fulfill()
     }
 
-    peripheral.send(payload: outgoingPayload)
+    peripheral.send(payload: outgoingPayload, to: peer.spec.identifier)
 
     await fulfillment(of: [transferStarted], timeout: 2.0)
 
@@ -365,7 +365,7 @@ final class BLEPeripheralManagerTests: XCTestCase {
 
 extension BLEPeripheralManagerTests {
   private func makeSUT(
-    ranger: ProximityRanger = MockRanger(),
+    ranger: @autoclosure @escaping () -> ProximityRanger = MockRanger(),
     file: StaticString = #filePath,
     line: UInt = #line,
   ) async -> BLEPeripheralManager {
@@ -374,7 +374,7 @@ extension BLEPeripheralManagerTests {
 
     let peripheral = BLEPeripheralManager(
       configuration: .init(),
-      ranger: ranger,
+      makeRanger: ranger,
       makeCipher: { PlainTextCipher() },
       forceMock: true,
     )
@@ -404,8 +404,7 @@ extension BLEPeripheralManagerTests {
     let subscribed = expectation(description: "the peer subscribed")
     let roleConfirmed = expectation(description: "role confirmed")
 
-    peripheral.onConnected = { subscribed.fulfill() }
-    peripheral.onRoleConfirmed = { roleConfirmed.fulfill() }
+    peripheral.onConnected = { _ in subscribed.fulfill() }
 
     peer.spec.simulateConnection()
 
